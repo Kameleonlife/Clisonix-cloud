@@ -1,5 +1,5 @@
 ﻿/**
- * Normalized next.config.js â€” single source of truth for rewrites
+ * Normalized next.config.js – single source of truth for rewrites
  * Rewrites /api/:path* to NEXT_PUBLIC_API_BASE (dev) or preserved host routes
  */
 const { createVanillaExtractPlugin } = require('@vanilla-extract/next-plugin');
@@ -12,8 +12,13 @@ const INTERNAL_API_HEADER = 'x-Clisonix-internal';
 const nextConfig = {
   reactStrictMode: true,
   output: 'standalone',
-  experimental: { appDir: true },
   transpilePackages: ['@vanilla-extract/css'],
+  eslint: {
+    // Disable ESLint during build - we have flat config in eslint.config.mjs
+    ignoreDuringBuilds: false,
+    // Explicitly disable old config file detection
+    dirs: ['app', 'pages', 'components', 'lib'],
+  },
   async rewrites() {
     return [
       // Primary API proxy used by the client

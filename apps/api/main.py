@@ -1,4 +1,491 @@
-﻿# ------------- Clisonix Cloud API (EEG to Audio) -------------
+﻿# --- CONSOLIDATED IMPORTS (MUST COME FIRST) ---
+import os
+import sys
+import time
+import json
+import uuid
+import socket
+import asyncio
+import logging
+import traceback
+import tempfile
+from pathlib import Path
+from datetime import datetime, timezone
+from typing import Optional, Dict, Any, List
+import statistics
+from collections import defaultdict
+from itertools import islice
+from glob import glob
+
+# FastAPI / ASGI
+from fastapi import FastAPI, UploadFile, File, Request, HTTPException, APIRouter, Form
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
+from fastapi.middleware.cors import CORSMiddleware
+from starlette.exceptions import HTTPException as StarletteHTTPException
+
+# Pydantic
+from pydantic import BaseModel, Field
+
+# Try importing BaseSettings from the correct location (Pydantic v2)
+try:
+    from pydantic_settings import BaseSettings
+except ImportError:
+    # Fallback for older Pydantic versions
+    try:
+        from pydantic import BaseSettings
+    except ImportError:
+        # If still not available, create a minimal base class
+        class BaseSettings:
+            class Config:
+                case_sensitive = True
+
+# System metrics
+try:
+    import psutil
+    _PSUTIL = True
+except Exception:
+    _PSUTIL = False
+
+# HTTP
+import requests
+
+# --- Brain Router Initialization (must come after imports) ---
+brain_router = APIRouter(prefix="/brain", tags=["brain"])
+
+# Assume 'cog' is the cognitive engine instance
+try:
+    from brain_engine import cog
+except ImportError:
+    cog = None
+
+# --- YouTube Insight Generator Endpoint ---
+@brain_router.get("/youtube/insight")
+async def youtube_insight(video_id: str):
+    """
+    YOUTUBE INSIGHT GENERATOR
+    Input:
+      - YouTube video ID
+
+    Output:
+      - metadata
+      - emotional tone
+      - core insights
+      - trend potential
+      - target audience
+      - recommended brain-sync
+    """
+
+    try:
+        from backend.integrations.youtube import _get_json
+        from backend.neuro.youtube_insight_engine import YouTubeInsightEngine
+        import httpx
+
+        engine = YouTubeInsightEngine()
+
+        # Fetch metadata from YouTube API
+        async with httpx.AsyncClient() as client:
+            url = "https://www.googleapis.com/youtube/v3/videos"
+            params = {
+                "id": video_id,
+                "part": "snippet,statistics,contentDetails",
+                "key": os.getenv("YOUTUBE_API_KEY")
+            }
+            data = await _get_json(client, url, params)
+
+        items = data.get("items") or []
+        if not items:
+            raise HTTPException(status_code=404, detail="video_not_found")
+
+        meta = items[0]
+
+        # Pass metadata to insight engine
+        result = engine.analyze(meta)
+
+        return {
+            "ok": True,
+            "video_id": video_id,
+            "insight": result
+        }
+
+    except Exception as e:
+        logger.error(f"[YT_INSIGHT_ERROR] {e}")
+        raise HTTPException(status_code=500, detail="youtube_insight_failed")
+# --- Daily Energy Check Endpoint ---
+@brain_router.post("/energy/check")
+async def daily_energy_check(file: UploadFile = File(...)):
+    """
+    DAILY ENERGY CHECK
+    Analyzes:
+    - dominant frequency
+    - vocal tension
+    - emotional tone
+    - energy level (0–100)
+    - recommended quick sound
+    """
+    try:
+        import tempfile
+        from backend.neuro.energy_engine import EnergyEngine
+
+        # Save audio sample
+        with tempfile.NamedTemporaryFile(delete=False, suffix=file.filename) as tmp:
+            blob = await file.read()
+            tmp.write(blob)
+            audio_path = tmp.name
+
+        engine = EnergyEngine()
+        result = engine.analyze(audio_path)
+
+        return {
+            "ok": True,
+            "energy": result
+        }
+
+    except Exception as e:
+        logger.error(f"[ENERGY CHECK ERROR] {e}")
+        raise HTTPException(status_code=500, detail="energy_check_failed")
+# --- Neural Moodboard Endpoint ---
+@brain_router.post("/moodboard/generate")
+async def generate_moodboard(
+    text: Optional[str] = None,
+    mood: Optional[str] = None,
+    file: Optional[UploadFile] = None
+):
+    """
+    NEURAL MOODBOARD
+    Input:
+    - text
+    - mood (calm, focus, happy, sad, dreamy, energetic)
+    - image OR audio (file upload)
+
+    Output:
+    - color palette
+    - dominant color
+    - emotion analysis
+    - harmonics (short sound profile)
+    - personality-archetype
+    - inspirational quote
+    """
+    try:
+        import tempfile
+        from backend.neuro.moodboard_engine import MoodboardEngine
+
+        engine = MoodboardEngine()
+
+        # Handle file if present
+        file_path = None
+        if file:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=file.filename) as tmp:
+                content = await file.read()
+                tmp.write(content)
+                file_path = tmp.name
+
+        result = engine.generate(
+            text=text,
+            mood=mood,
+            file_path=file_path
+        )
+
+        return {
+            "ok": True,
+            "moodboard": result
+        }
+
+    except Exception as e:
+        logger.error(f"[MOODBOARD ERROR] {e}")
+        raise HTTPException(status_code=500, detail="moodboard_failed")
+# --- Personal Brain-Sync Music Endpoint ---
+from fastapi.responses import StreamingResponse
+
+@brain_router.post("/music/brainsync")
+async def generate_brainsync_music(
+    mode: str,
+    file: UploadFile = File(...)
+):
+    """
+    PERSONAL BRAIN-SYNC MUSIC
+    Modes:
+    - relax, focus, sleep, motivation, creativity, recovery
+    Input:
+    - Audio file from user (used for personality & harmonic mapping)
+    """
+    try:
+        import tempfile
+
+        # Save audio
+        with tempfile.NamedTemporaryFile(delete=False, suffix=file.filename) as tmp:
+            audio_bytes = await file.read()
+            tmp.write(audio_bytes)
+            audio_path = tmp.name
+
+        # Step 1: run HPS (personality scan)
+        from backend.neuro.hps_engine import HPSEngine
+        hps = HPSEngine()
+        profile = hps.scan(audio_path)
+
+        # Step 2: generate brain-sync music
+        from backend.neuro.brainsync_engine import BrainSyncEngine
+        sync = BrainSyncEngine()
+
+        output_path = sync.generate(mode, profile)
+
+        # Return generated audio
+        def stream():
+            with open(output_path, "rb") as f:
+                yield from f
+
+        return StreamingResponse(
+            stream(),
+            media_type="audio/wav",
+            headers={"Content-Disposition": "attachment; filename=brainsync.wav"}
+        )
+
+    except Exception as e:
+        logger.error(f"[BRAINSYNC ERROR] {e}")
+        raise HTTPException(status_code=500, detail="brainsync_failed")
+
+# --- Harmonic Personality Scan Endpoint ---
+@brain_router.post("/scan/harmonic")
+async def harmonic_personality_scan(file: UploadFile = File(...)):
+    """
+    HARMONIC PERSONALITY SCAN (HPS)
+    Extracts:
+    - Key
+    - BPM / Tempo
+    - Harmonic Fingerprint
+    - Emotional Tone
+    - Personality Archetype
+    """
+    try:
+        import tempfile
+        # Save temp audio
+        with tempfile.NamedTemporaryFile(delete=False, suffix=file.filename) as tmp:
+            audio_bytes = await file.read()
+            tmp.write(audio_bytes)
+            audio_path = tmp.name
+
+        from backend.neuro.hps_engine import HPSEngine
+        hps = HPSEngine()
+        result = hps.scan(audio_path)
+
+        return {
+            "ok": True,
+            "type": "harmonic_personality_scan",
+            "result": result
+        }
+
+    except Exception as e:
+        logger.error(f"[HPS ERROR] {e}")
+        raise HTTPException(status_code=500, detail="hps_failed")
+# --- Brain Sync Endpoint (YouTube & Audio Integration) ---
+@brain_router.post("/sync")
+async def brain_sync(
+    youtube_video_id: Optional[str] = Form(None),
+    file: Optional[UploadFile] = File(None)
+):
+    """
+    Full NEURAL–HARMONIC SYNCHRONIZATION ENGINE.
+    Accepts:
+    - YouTube video ID (fetches metadata)
+    - Audio file (analyzes harmony, converts to MIDI, syncs pipelines)
+    """
+    if not cog:
+        raise HTTPException(status_code=503, detail="Cognitive engine not available")
+    try:
+        # 1. SYNC WITH YOUTUBE VIDEO
+        if youtube_video_id:
+            # Fetch YouTube metadata
+            async with httpx.AsyncClient() as client:
+                url_summary = "https://www.googleapis.com/youtube/v3/videos"
+                params = {
+                    "part": "snippet,contentDetails,statistics",
+                    "id": youtube_video_id,
+                    "key": os.getenv("YOUTUBE_API_KEY")
+                }
+                resp = await client.get(url_summary, params=params)
+                yt_data = resp.json()
+                items = yt_data.get("items") or []
+                if not items:
+                    raise HTTPException(status_code=404, detail="video_not_found")
+                video = items[0]
+                snippet = video.get("snippet", {})
+            return {
+                "ok": True,
+                "mode": "youtube_sync",
+                "video_id": youtube_video_id,
+                "title": snippet.get("title"),
+                "description": snippet.get("description"),
+                "published_at": snippet.get("publishedAt"),
+                "note": "Metadata synced. Audio must be uploaded to complete harmony+MIDI sync."
+            }
+
+        # 2. SYNC WITH AUDIO FILE
+        if file:
+            import tempfile
+            with tempfile.NamedTemporaryFile(delete=False, suffix=file.filename) as tmp:
+                audio_bytes = await file.read()
+                tmp.write(audio_bytes)
+                audio_path = tmp.name
+
+            # 2a. Harmonic analysis
+            harmony = await cog.analyze_harmony(audio_path)
+
+            # 2b. Real MIDI conversion
+            from backend.neuro.audio_to_midi import AudioToMidi
+            converter = AudioToMidi()
+            midi_temp = tempfile.NamedTemporaryFile(delete=False, suffix=".mid")
+            midi_path = midi_temp.name
+            midi_temp.close()
+            midi_output = converter.convert(audio_path, midi_path)
+
+            # 2c. Neural Load + Pipeline Sync
+            neural_load = await cog.get_neural_load()
+            pipelines = await cog.get_pipeline_status()
+
+            return {
+                "ok": True,
+                "mode": "file_sync",
+                "harmony": harmony,
+                "neural_load": neural_load,
+                "pipelines": pipelines,
+                "midi_file_path": midi_output
+            }
+
+        # If nothing provided
+        raise HTTPException(status_code=400, detail="missing_input")
+
+    except Exception as e:
+        logger.error(f"[SYNC ERROR] {e}")
+        raise HTTPException(status_code=500, detail="sync_engine_failed")
+# --- Brain Harmony Endpoint ---
+@brain_router.post("/harmony")
+async def analyze_harmony(file: UploadFile = File(...)):
+    """
+    Returns REAL harmonic structure from audio:
+    - Fundamental frequency (F0)
+    - Overtones
+    - Chord estimation
+    - Harmonic progression
+    - Tonal center
+    - Scale mode
+    - Alpha/Harmonic Index
+    """
+    if not cog:
+        raise HTTPException(status_code=503, detail="Cognitive engine not available")
+    try:
+        # Save temp audio
+        with tempfile.NamedTemporaryFile(delete=False, suffix=file.filename) as temp_file:
+            audio_bytes = await file.read()
+            temp_file.write(audio_bytes)
+            audio_path = temp_file.name
+
+        # Use Clisonix Core
+        harmony = await cog.analyze_harmony(audio_path)
+
+        return {
+            "ok": True,
+            "harmony_profile": harmony,
+            "timestamp": time.time()
+        }
+
+    except Exception as e:
+        logger.error(f"[HARMONY ERROR] {e}")
+        raise HTTPException(status_code=500, detail="harmony_analysis_failed")
+# --- Brain API – Pjesa 2: Industrial Endpoints ---
+@brain_router.get("/cortex-map")
+async def get_cortex_map():
+    """
+    Returns the full neural architecture map:
+    - Modules
+    - Connections
+    - Weights (abstract)
+    - Active signals
+    """
+    if not cog:
+        raise HTTPException(status_code=503, detail="Cognitive engine not available")
+    try:
+        cortex = await cog.get_cortex_map()
+        return {
+            "ok": True,
+            "cortex_map": cortex,
+            "timestamp": time.time()
+        }
+    except Exception as e:
+        logger.error(f"[CORTEX MAP ERROR] {e}")
+        raise HTTPException(status_code=500, detail="internal_cortex_error")
+
+@brain_router.get("/temperature")
+async def get_brain_temperatures():
+    """
+    Returns per-module thermal stress and CPU temperature (if supported).
+    """
+    if not cog:
+        raise HTTPException(status_code=503, detail="Cognitive engine not available")
+    try:
+        temps = await cog.get_module_temperatures()
+        return {
+            "ok": True,
+            "temperature": temps,
+            "timestamp": time.time()
+        }
+    except Exception as e:
+        logger.error(f"[TEMP ERROR] {e}")
+        raise HTTPException(status_code=500, detail="internal_temperature_error")
+
+@brain_router.get("/queue")
+async def get_queue_status():
+    """
+    Returns queue metrics for ingestion, processing, synthesis.
+    """
+    if not cog:
+        raise HTTPException(status_code=503, detail="Cognitive engine not available")
+    try:
+        q = await cog.get_queue_status()
+        return {
+            "ok": True,
+            "queues": q,
+            "timestamp": time.time()
+        }
+    except Exception as e:
+        logger.error(f"[QUEUE ERROR] {e}")
+        raise HTTPException(status_code=500, detail="internal_queue_error")
+
+@brain_router.get("/threads")
+async def get_thread_info():
+    """
+    Returns threads, CPU usage, and active processing routines.
+    """
+    if not cog:
+        raise HTTPException(status_code=503, detail="Cognitive engine not available")
+    try:
+        t = await cog.get_thread_status()
+        return {
+            "ok": True,
+            "threads": t,
+            "timestamp": time.time()
+        }
+    except Exception as e:
+        logger.error(f"[THREAD ERROR] {e}")
+        raise HTTPException(status_code=500, detail="internal_thread_error")
+
+@brain_router.post("/restart")
+async def restart_brain():
+    """
+    Safely restarts cognitive modules without killing API.
+    """
+    if not cog:
+        raise HTTPException(status_code=503, detail="Cognitive engine not available")
+    try:
+        result = await cog.safe_restart()
+        return {
+            "ok": True,
+            "message": "Cognitive engine restarted",
+            "details": result
+        }
+    except Exception as e:
+        logger.error(f"[RESTART ERROR] {e}")
+        raise HTTPException(status_code=500, detail="internal_restart_failed")
+# ------------- Clisonix Cloud API (EEG to Audio) -------------
 from fastapi.responses import StreamingResponse
 import numpy as np
 import io
@@ -70,25 +557,20 @@ from fastapi.responses import JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+BaseSettings = None
 # Config (env)
 try:
-    from pydantic import BaseModel, Field
+    from pydantic import BaseSettings
+    _PYD = True
+except ImportError:
     try:
         from pydantic_settings import BaseSettings
-    except Exception:  # PyDantic v1 compatibility
-        from pydantic import BaseSettings  # type: ignore
-    _PYD = True
-except Exception:
-    _PYD = False
-    class BaseSettings: ...
-    class BaseModel:
-        def __init__(self, **kwargs):
-            for key, value in kwargs.items():
-                setattr(self, key, value)
-
-        def dict(self, *_, **__):
-            return self.__dict__
-    def Field(*args, **kwargs): return None
+        _PYD = True
+    except ImportError:
+        _PYD = False
+        class BaseSettings(object):
+            pass
+from pydantic import BaseModel, Field
 
 # System metrics
 try:
@@ -214,36 +696,36 @@ pg_pool: Optional[Any] = None
 # ------------- Schemas -------------
 
 class ErrorEnvelope(BaseModel):
-    error: str
-    message: str
-    timestamp: str
-    instance: str
-    correlation_id: str
+    error: str = ''
+    message: str = ''
+    timestamp: str = ''
+    instance: str = ''
+    correlation_id: str = ''
     path: Optional[str] = None
     details: Optional[Any] = None
 
 
 class AskRequest(BaseModel):
-    question: str = Field(..., min_length=3)
-    context: Optional[str] = Field(default=None, description="Optional additional context for the question")
-    include_details: bool = Field(default=True, description="When false, omits the heavy 'details' block in the response")
+    question: str = ''
+    context: Optional[str] = None
+    include_details: bool = True
 
 
 class AskResponse(BaseModel):
-    answer: str
-    timestamp: str
-    modules_used: List[str]
-    processing_time_ms: float
-    details: Dict[str, Any] = Field(default_factory=dict)
+    answer: str = ''
+    timestamp: str = ''
+    modules_used: List[str] = []
+    processing_time_ms: float = 0.0
+    details: Dict[str, Any] = {}
 
 
 class MemoryUsage(BaseModel):
-    used: int
-    total: int
+    used: int = 0
+    total: int = 0
 
 
 class ServiceStatus(BaseModel):
-    status: str
+    status: str = ''
     message: Optional[str] = None
     connected_clients: Optional[int] = None
     used_memory: Optional[str] = None
@@ -252,86 +734,86 @@ class ServiceStatus(BaseModel):
 
 
 class SystemMetrics(BaseModel):
-    cpu_percent: float = Field(..., ge=0)
-    memory_percent: float = Field(..., ge=0)
-    memory_total: int = Field(..., ge=0)
-    disk_percent: float = Field(..., ge=0)
-    disk_total: int = Field(..., ge=0)
-    net_bytes_sent: int = Field(..., ge=0)
-    net_bytes_recv: int = Field(..., ge=0)
-    processes: int = Field(..., ge=0)
-    hostname: str
-    boot_time: float = Field(..., ge=0)
-    uptime_seconds: float = Field(..., ge=0)
+    cpu_percent: float = 0.0
+    memory_percent: float = 0.0
+    memory_total: int = 0
+    disk_percent: float = 0.0
+    disk_total: int = 0
+    net_bytes_sent: int = 0
+    net_bytes_recv: int = 0
+    processes: int = 0
+    hostname: str = ''
+    boot_time: float = 0.0
+    uptime_seconds: float = 0.0
 
 
 class HealthResponse(BaseModel):
-    service: str
-    status: str
-    version: str
-    timestamp: str
-    instance_id: str
-    uptime_app_seconds: float
-    system: SystemMetrics
-    redis: ServiceStatus
-    database: ServiceStatus
-    environment: str
+    service: str = ''
+    status: str = ''
+    version: str = ''
+    timestamp: str = ''
+    instance_id: str = ''
+    uptime_app_seconds: float = 0.0
+    system: SystemMetrics = SystemMetrics()
+    redis: ServiceStatus = ServiceStatus()
+    database: ServiceStatus = ServiceStatus()
+    environment: str = ''
 
 
 class StatusResponse(BaseModel):
-    timestamp: str
-    instance_id: str
-    status: str
-    uptime: str
-    memory: MemoryUsage
-    system: SystemMetrics
-    redis: ServiceStatus
-    database: ServiceStatus
-    storage_dir: str
-    dependencies: Dict[str, bool]
+    timestamp: str = ''
+    instance_id: str = ''
+    status: str = ''
+    uptime: str = ''
+    memory: MemoryUsage = MemoryUsage()
+    system: SystemMetrics = SystemMetrics()
+    redis: ServiceStatus = ServiceStatus()
+    database: ServiceStatus = ServiceStatus()
+    storage_dir: str = ''
+    dependencies: Dict[str, bool] = {}
 
 
 class PayPalAmount(BaseModel):
-    currency_code: str = Field(..., min_length=3, max_length=3)
-    value: str = Field(..., pattern=r"^\d+(\.\d{1,2})?$")
+    currency_code: str = ''
+    value: str = ''
 
 
 class PayPalPurchaseUnit(BaseModel):
-    amount: PayPalAmount
+    amount: PayPalAmount = PayPalAmount()
     reference_id: Optional[str] = None
 
 
 class PayPalCreateOrderRequest(BaseModel):
-    intent: str = Field(..., min_length=1)
-    purchase_units: List[PayPalPurchaseUnit]
+    intent: str = ''
+    purchase_units: List[PayPalPurchaseUnit] = []
 
 
 class StripePaymentIntentRequest(BaseModel):
-    amount: int = Field(..., gt=0)
-    currency: str = Field(..., min_length=3, max_length=3)
-    payment_method_types: Optional[List[str]] = Field(default=None, description="List of Stripe payment method types, e.g. ['card']")
+    amount: int = 0
+    currency: str = ''
+    payment_method_types: Optional[List[str]] = None
     description: Optional[str] = None
     customer: Optional[str] = None
     metadata: Optional[Dict[str, str]] = None
 
 
 class SepaInitiateRequest(BaseModel):
-    debtor_iban: str = Field(..., min_length=15, max_length=34)
-    creditor_iban: str = Field(..., min_length=15, max_length=34)
-    amount: str = Field(..., pattern=r"^\d+(\.\d{1,2})?$")
-    currency: str = Field(default="EUR", min_length=3, max_length=3)
+    debtor_iban: str = ''
+    creditor_iban: str = ''
+    amount: str = ''
+    currency: str = 'EUR'
     remittance_information: Optional[str] = None
 
 
 class SimpleAck(BaseModel):
-    status: str
-    timestamp: str
+    status: str = ''
+    timestamp: str = ''
 
 
 class ASIExecuteRequest(BaseModel):
-    command: Optional[str] = Field(default=None, description="Command to execute through the ASI system")
-    agent: str = Field(default="trinity", description="Target agent: alba, albi, jona or trinity")
-    parameters: Dict[str, Any] = Field(default_factory=dict)
+    command: Optional[str] = None
+    agent: str = 'trinity'
+    parameters: Dict[str, Any] = {}
 
     class Config:
         extra = "allow"
@@ -444,6 +926,8 @@ def collect_clisonix_scan() -> Dict[str, Any]:
 def collect_service_processes(ports: List[int]) -> List[Dict[str, Any]]:
     if not _PSUTIL:
         return []
+    # Ensure psutil is imported before use
+    import psutil  # type: ignore
     results: List[Dict[str, Any]] = []
     for proc in psutil.process_iter(["pid", "name", "cmdline", "connections", "cpu_percent", "memory_info"]):
         try:
@@ -549,7 +1033,7 @@ def summarize_alba(entries: List[Dict[str, Any]]) -> Dict[str, Any]:
         "latest": {
             "id": latest.get("id"),
             "type": latest.get("type"),
-            "timestamp": latest.get("timestamp),
+            "timestamp": latest.get("timestamp"),
             "source": latest.get("source"),
             "status": latest.get("status"),
         },
@@ -956,6 +1440,7 @@ def get_system_metrics() -> Dict[str, Any]:
     if not _PSUTIL:
         raise HTTPException(status_code=501, detail="psutil not installed")
     try:
+        import psutil  # Ensure psutil is imported in this scope
         cpu = psutil.cpu_percent(interval=0.1)
         vm = psutil.virtual_memory()
         disk = psutil.disk_usage(Path(settings.storage_dir).anchor or "/")
@@ -1055,9 +1540,18 @@ async def status_full():
         }
     }
 
+@app.get("/api/system-status", response_model=StatusResponse, responses={503: {"model": ErrorEnvelope}, 500: {"model": ErrorEnvelope}})
+async def system_status_api():
+    """Proxy endpoint for frontend API calls (same as /status)"""
+    return await status_full()
+
 # ------------- EEG Processing (REAL) -------------
 def _eeg_band_powers(raw: "mne.io.BaseRaw", fmin: float, fmax: float) -> Dict[str, float]:
-    data, sfreq = raw.get_data(return_times=False), raw.info["sfreq"]
+    data = raw.get_data(return_times=False)
+    sfreq = raw.info["sfreq"]
+    # Ensure data is a numpy array (not a tuple)
+    if isinstance(data, tuple):
+        data = data[0]
     # Welch PSD per channel
     psd_vals = []
     for ch in range(data.shape[0]):
@@ -1207,7 +1701,7 @@ def paypal_token() -> str:
         r = requests.post(
             f"{settings.paypal_base}/v1/oauth2/token",
             data={"grant_type": "client_credentials"},
-            auth=(settings.paypal_client_id, settings.paypal_secret),
+            auth=(str(settings.paypal_client_id), str(settings.paypal_secret)),
             timeout=10
         )
         if r.status_code != 200:
@@ -1273,7 +1767,7 @@ def paypal_capture_order(order_id: str):
         )
 
 def require_stripe():
-    require(settings.stripe_api_key, "Stripe not configured", 501, error_code="STRIPE_NOT_CONFIGURED")
+    require(bool(settings.stripe_api_key), "Stripe not configured", 501, error_code="STRIPE_NOT_CONFIGURED")
 
 @app.post(
     "/billing/stripe/payment-intent",
@@ -1339,7 +1833,8 @@ def sepa_initiate(payload: SepaInitiateRequest):
 # ------------- DB Utility Endpoints (REAL) -------------
 @app.get("/db/ping", response_model=SimpleAck, responses={501: {"model": ErrorEnvelope}, 500: {"model": ErrorEnvelope}})
 async def db_ping():
-    require(pg_pool is not None, "Database not configured", 501, error_code="DATABASE_NOT_CONFIGURED")
+    if pg_pool is None:
+        raise HTTPException(status_code=501, detail={"code": "DATABASE_NOT_CONFIGURED", "message": "Database not configured"})
     try:
         async with pg_pool.acquire() as conn:
             await conn.execute("SELECT 1;")
@@ -1351,12 +1846,97 @@ async def db_ping():
 async def redis_ping():
     require(redis_client is not None, "Redis not configured", 501, error_code="REDIS_NOT_CONFIGURED")
     try:
+        if redis_client is None:
+            raise HTTPException(status_code=501, detail="Redis not configured")
         pong = await redis_client.ping()
         return {"status": "ok" if pong else "unknown", "timestamp": utcnow()}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# ------------- Routes -------------
+
+# ------------- Brain Router (Cognitive Endpoints) -------------
+from fastapi import APIRouter
+from fastapi.responses import StreamingResponse
+import asyncio
+
+# Assume 'cog' is the cognitive engine instance, must be available in the context
+try:
+    from brain_engine import cog  # If you have a brain_engine.py with a cog instance
+except ImportError:
+    cog = None  # Fallback for now; should be replaced with actual import
+
+# Duplicate declaration removed (already initialized at top of file)
+
+@brain_router.get("/neural-load")
+async def get_neural_load():
+    """
+    Returns industrial neural load metrics for all cognitive modules.
+    """
+    if not cog:
+        raise HTTPException(status_code=503, detail="Cognitive engine not available")
+    try:
+        load = await cog.get_neural_load()
+        return {
+            "ok": True,
+            "neural_load": load,
+            "timestamp": time.time()
+        }
+    except Exception as e:
+        logger.error(f"[NEURAL LOAD ERROR] {e}")
+        raise HTTPException(status_code=500, detail="internal_neural_load_error")
+
+@brain_router.get("/errors")
+async def get_brain_errors():
+    """
+    Returns real-time cognitive and system errors collected by the Brain Engine.
+    """
+    if not cog:
+        raise HTTPException(status_code=503, detail="Cognitive engine not available")
+    try:
+        errors = await cog.get_error_log()
+        return {
+            "ok": True,
+            "errors": errors,
+            "count": len(errors),
+            "timestamp": time.time()
+        }
+    except Exception as e:
+        logger.error(f"[BRAIN ERRORS ERROR] {e}")
+        raise HTTPException(status_code=500, detail="internal_error_center_issue")
+
+@brain_router.get("/live")
+async def stream_live_brain():
+    """
+    SSE stream with real-time cognitive engine metrics.
+    Updates every 0.5 seconds.
+    """
+    if not cog:
+        def error_stream():
+            yield "data: {'error': 'cognitive_engine_unavailable'}\n\n"
+        return StreamingResponse(error_stream(), media_type="text/event-stream")
+
+    async def event_stream():
+        while True:
+            try:
+                health = await cog.get_health_metrics()
+                load = await cog.get_neural_load()
+                msg = {
+                    "health": health,
+                    "neural_load": load,
+                    "timestamp": time.time()
+                }
+                import json
+                yield f"data: {json.dumps(msg)}\n\n"
+                await asyncio.sleep(0.5)
+            except Exception as e:
+                logger.error(f"[LIVE STREAM ERROR] {e}")
+                yield "data: {'error': 'internal_stream_error'}\n\n"
+                await asyncio.sleep(1)
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+# Register brain_router with the main app
+app.include_router(brain_router)
 
 # Import and include Alba monitoring routes
 try:

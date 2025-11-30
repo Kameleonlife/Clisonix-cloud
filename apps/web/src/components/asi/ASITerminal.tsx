@@ -25,23 +25,8 @@ function ClientTimeDisplay({ timestamp }: { timestamp: Date }) {
   
   return <span>{timestamp.toLocaleTimeString()}</span>;
 }
-import { 
-  asiTerminal, 
-  terminalHeader, 
-  terminalDotRed, 
-  terminalDotYellow, 
-  terminalDotGreen,
-  commandCompleted,
-  commandRejected,
-  commandExecuting
-} from '@/styles/asi.css';
-import { 
-  asiButton, 
-  commandInputVariants, 
-  statusBadge,
-  type ASIButtonProps,
-  type CommandInputProps 
-} from '@/lib/components/variants';
+
+import { asiButton, commandInputVariants, statusBadge } from '@/lib/components/variants';
 import { clsx } from 'clsx';
 
 interface ASITerminalProps {
@@ -81,10 +66,10 @@ export function ASITerminal({ className, maxCommands = 10 }: ASITerminalProps) {
 
   const getCommandStyle = (status: string) => {
     switch (status) {
-      case 'completed': return commandCompleted;
-      case 'rejected': return commandRejected;
-      case 'executing': return commandExecuting;
-      default: return commandExecuting;
+      case 'completed': return 'commandCompleted';
+      case 'rejected': return 'commandRejected';
+      case 'executing': return 'commandExecuting';
+      default: return 'commandExecuting';
     }
   };
 
@@ -95,13 +80,13 @@ export function ASITerminal({ className, maxCommands = 10 }: ASITerminalProps) {
   };
 
   return (
-    <div className={clsx(asiTerminal, className)}>
+    <div className={clsx('asiTerminal', className)}>
       {/* Terminal Header */}
-      <div className={terminalHeader}>
+      <div className="terminalHeader">
         <div className="flex items-center space-x-2">
-          <div className={terminalDotRed} />
-          <div className={terminalDotYellow} />
-          <div className={terminalDotGreen} />
+          <div className="terminalDotRed" />
+          <div className="terminalDotYellow" />
+          <div className="terminalDotGreen" />
         </div>
         <div className="flex-1 flex items-center justify-center">
           <span className="text-gray-400 text-sm font-mono">
@@ -265,7 +250,7 @@ export function ASITerminal({ className, maxCommands = 10 }: ASITerminalProps) {
             exit={{ opacity: 0, y: -10 }}
             className="mt-2 text-xs text-gray-500"
           >
-            💡 Provoni: "monitor network", "scan security", "backup files", "optimize system"
+            💡 Provoni: &quot;monitor network&quot;, &quot;scan security&quot;, &quot;backup files&quot;, &quot;optimize system&quot;
           </motion.div>
         )}
       </form>

@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
 import stripe
+import stripe.error # type: ignore
 import logging
 from datetime import datetime, timezone
 import json
@@ -31,7 +32,7 @@ class StripeService:
         """Create Stripe customer for user"""
         try:
             customer = stripe.Customer.create(
-                email=user.email,
+                email=getattr(user, "email"),
                 name=f"{user.first_name} {user.last_name}",
                 metadata={
                     "user_id": str(user.id),
@@ -58,8 +59,8 @@ class StripeService:
         
         try:
             # Ensure user has Stripe customer ID
-            customer_id = user.stripe_customer_id
-            if not customer_id:
+            customer_id = getattr(user, "stripe_customer_id", None)
+            if customer_id is None:
                 customer_id = await StripeService.create_customer(user)
                 # Update user with customer ID (would need database session)
             
@@ -86,7 +87,7 @@ class StripeService:
                 },
                 allow_promotion_codes=True,
                 billing_address_collection='required',
-                automatic_tax={'enabled': True} if settings.environment == "production" else None
+                automatic_tax={'enabled': True} if settings.environment == "production" else None # type: ignore
             )
             
             return {
@@ -161,7 +162,7 @@ async def create_checkout(
     cancel_url = cancel_url or settings.stripe_cancel_url
     
     # Check if user already has this plan
-    if current_user.subscription_plan == plan:
+    if str(getattr(current_user, 'subscription_plan', '')) == plan:
         raise HTTPException(status_code=400, detail="User already has this plan")
     
     try:
@@ -191,7 +192,7 @@ async def create_portal_session(
 ):
     """Create Stripe customer portal session"""
     
-    if not current_user.stripe_customer_id:
+    if not getattr(current_user, 'stripe_customer_id', None):
         raise HTTPException(
             status_code=400, 
             detail="No Stripe customer found. Please subscribe to a plan first."
@@ -201,7 +202,7 @@ async def create_portal_session(
     
     try:
         portal_url = await StripeService.create_portal_session(
-            customer_id=current_user.stripe_customer_id,
+            customer_id=getattr(current_user, "stripe_customer_id"),
             return_url=return_url
         )
         
@@ -225,7 +226,7 @@ async def get_subscription_status(
     subscription = result.scalar_one_or_none()
     
     # Get plan quotas
-    plan_quotas = settings.plan_quotas.get(current_user.subscription_plan, {})
+    plan_quotas = settings.plan_quotas.get(str(getattr(current_user, 'subscription_plan', '')), {})
     
     # Get current usage (would integrate with Redis/analytics)
     current_usage = {
@@ -236,7 +237,7 @@ async def get_subscription_status(
     }
     
     return {
-        "plan": current_user.subscription_plan,
+        "plan": str(getattr(current_user, 'subscription_plan', '')),
         "status": subscription.status if subscription else "inactive",
         "quotas": plan_quotas,
         "usage": current_usage,
@@ -462,10 +463,10 @@ async def get_usage_analytics(
     # This would integrate with Redis and analytics system
     # For now, return mock data structure
     
-    plan_quotas = settings.plan_quotas.get(current_user.subscription_plan, {})
+    plan_quotas = settings.plan_quotas.get(str(getattr(current_user, 'subscription_plan', '')), {})
     
     return {
-        "plan": current_user.subscription_plan,
+        "plan": str(getattr(current_user, 'subscription_plan', '')),
         "quotas": plan_quotas,
         "usage": {
             "uploads": {

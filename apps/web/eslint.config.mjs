@@ -1,32 +1,17 @@
+﻿import js from "@eslint/js";
 import { dirname } from "path";
 import { fileURLToPath } from "url";
 import { FlatCompat } from "@eslint/eslintrc";
 
 const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename); // Keep this line for context
+const __dirname = dirname(__filename);
 
 const compat = new FlatCompat({
   baseDirectory: __dirname,
+  recommendedConfig: js.configs.recommended,
 });
 
-const baseConfigs = compat.extends("next/core-web-vitals", "next/typescript");
-
-for (const config of baseConfigs) {
-  config.rules = {
-    ...config.rules,
-    "@typescript-eslint/no-unused-expressions": [
-      "warn",
-      {
-        allowShortCircuit: true,
-        allowTernary: true,
-        allowTaggedTemplates: true,
-      },
-    ],
-  };
-}
-
-const eslintConfig = [
-  ...baseConfigs,
+export default [
   {
     ignores: [
       "node_modules/**",
@@ -34,8 +19,20 @@ const eslintConfig = [
       "out/**",
       "build/**",
       "next-env.d.ts",
+      "dist/**",
     ],
   },
+  ...compat.extends("next/core-web-vitals", "next/typescript"),
+  {
+    rules: {
+      "@typescript-eslint/no-unused-expressions": [
+        "warn",
+        {
+          allowShortCircuit: true,
+          allowTernary: true,
+          allowTaggedTemplates: true,
+        },
+      ],
+    },
+  },
 ];
-
-export default eslintConfig;

@@ -51,7 +51,7 @@ const ChatPage = () => {
         data?.response ||
         data?.result ||
         data?.output ||
-        'âš ï¸ AsnjÃ« pÃ«rgjigje e kthyer nga AGI/ASI.';
+        '⚠️ Asnjë përgjigje e kthyer nga AGI/ASI.';
 
       setMessages((prev) => [
         ...prev,
@@ -62,14 +62,14 @@ const ChatPage = () => {
           timestamp: new Date().toISOString(),
         },
       ]);
-    } catch (error) {
+    } catch {
       setMessages((prev) => [
         ...prev,
         {
           id: crypto.randomUUID(),
           sender: 'system',
           content:
-            'âš ï¸ Nuk u arrit lidhja me backend. Kontrollo qÃ« `Clisonix` po punon nÃ« portin 8000.',
+            'Asi Nuk u arrit lidhja me backend. Kontrollo që `Clisonix` po punon në portin 8000.',
           timestamp: new Date().toISOString(),
         },
       ]);
@@ -104,7 +104,7 @@ const ChatPage = () => {
           >
             {messages.length === 0 && (
               <p className="text-gray-400 text-center mt-10">
-                Filloni njÃ« bisedÃ« me inteligjencÃ«n AGI...
+                Filloni një bisedë me inteligjencën AGI...
               </p>
             )}
 
@@ -144,7 +144,7 @@ const ChatPage = () => {
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
-              placeholder="Shkruaj njÃ« pyetje ose komandÃ« pÃ«r AGI..."
+              placeholder="Shkruaj një pyetje ose komandë për AGI..."
               className="flex-grow p-3 rounded-xl bg-gray-800 text-white border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
             <button
@@ -153,7 +153,7 @@ const ChatPage = () => {
               disabled={loading || !inputValue.trim()}
               className="px-5 py-3 rounded-xl bg-blue-600 text-white font-medium hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              {loading ? 'Duke menduar...' : 'DÃ«rgo'}
+              {loading ? 'Duke menduar...' : 'Dërgo'}
             </button>
           </div>
         </div>

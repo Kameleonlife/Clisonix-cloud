@@ -129,6 +129,72 @@ class AGIEMCore:
     telemetry reporting. No fake data.
     """
 
+    # ---------------------------
+    # Backup (safe, non-destructive)
+    # ---------------------------
+    def backup_data(self, path: str, out_file: Optional[str] = None) -> Dict[str, Any]:
+        """Create a zip archive of `path` and return summary with size (bytes).
+
+        This function performs only read operations and writes a single zip file.
+        """
+        source = Path(path)
+        if not source.exists():
+            msg = f"Backup source not found: {path}"
+            self.log_event("AGIEM", msg, "ERROR")
+            return {"error": msg}
+
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        if out_file is None:
+            out_file = str(Path.cwd() / f"agiem_backup_{timestamp}.zip")
+
+        try:
+            with zipfile.ZipFile(out_file, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+                for root, _, files in os.walk(source):
+                    for fname in files:
+                        fpath = Path(root) / fname
+                        # store relative path in archive
+                        arcname = str(Path(root).relative_to(source) / fname)
+                        zf.write(fpath, arcname)
+            size = Path(out_file).stat().st_size
+            self.log_event("AGIEM", f"Backup created: {out_file} ({size} bytes)")
+            return {"backup_file": out_file, "size_bytes": size}
+        except Exception as exc:
+            self.log_event("AGIEM", f"Backup failed: {exc}", "ERROR")
+            return {"error": str(exc)}
+
+    # ---------------------------
+    # Log analysis (simple, real)
+    # ---------------------------
+    def analyze_logs(self, log_path: str, tail: int = 200) -> Dict[str, Any]:
+        """Scan log files under `log_path` and extract recent ERROR/WARNING lines.
+
+        Returns a summary dict with counts and sample lines. This is intentionally
+        conservative: it does not parse proprietary formats.
+        """
+        log_dir = Path(log_path)
+        if not log_dir.exists() or not log_dir.is_dir():
+            self.log_event("AGIEM", f"Log directory not found: {log_path}", "WARN")
+            return {"anomalies_count": 0, "samples": []}
+
+        anomalies: List[str] = []
+        try:
+            for file in sorted(log_dir.glob("*.log")):
+                try:
+                    with file.open("r", encoding="utf-8", errors="ignore") as fh:
+                        lines = fh.readlines()[-tail:]
+                        for ln in lines:
+                            if any(k in ln for k in ("ERROR", "CRIT", "FAIL", "Exception")):
+                                anomalies.append(f"{file.name}: {ln.strip()}")
+                except Exception as e_file:
+                    logger.debug(f"Could not read log {file}: {e_file}")
+        except Exception as e:
+            logger.exception("Unhandled exception during analyze_logs")
+
+        sample = anomalies[-10:]
+        report = {"anomalies_count": len(anomalies), "samples": sample}
+        self.log_event("AGIEM", f"Log analysis: {report['anomalies_count']} anomalies found")
+        return report
+
     def __init__(self, hq_event_url: str = "http://localhost:7777/mesh/event") -> None:
         self.hq_event_url = hq_event_url
         self.nodes: Dict[str, Dict[str, Any]] = {
@@ -202,12 +268,7 @@ class AGIEMCore:
             self.log_event("AGIEM", f"Unknown node attempted update: {node}", "WARN")
             return
         self.nodes[node]["status"] = status
-        self.log_event(node, f"status -> {status}")
-        stage = self.stages.get(node)
-        if stage:
-            stage.record_metric("status", status)
-            stage.add_note(f"Status updated to {status}")
-
+        self.log_event("AGIEM", f"Node {node} status updated to {status}", "INFO")
     def record_stage_metric(self, stage_name: str, metric_key: str, value: Any) -> None:
         stage = self.stages.get(stage_name)
         if stage is None:
@@ -586,7 +647,7 @@ class ReproductionPipeline:
         stage_reports.append({"stage": "ASI", **report})
 
         total_duration = round(time.time() - start_time, 3)
-        summary = self._build_summary(pipeline_state)
+        summary = self._build_summary(pipeline_state, stage_reports)
         return {
             "cycle_started": cycle_started,
             "cycle_duration_seconds": total_duration,
@@ -846,38 +907,61 @@ class ReproductionPipeline:
                     .replace("T", "_")
                     .replace("+", "")
                 )
-                packet = self._proposal_lab.persist_packet(
-                    brief,
-                    filename_prefix=f"cycle_{packet_prefix}"
-                )
-                proposal_payload = {
-                    "title": brief.title,
-                    "summary": brief.executive_summary,
-                    "packet_path": str(packet.packet_path) if packet.packet_path else None,
-                }
-                updated_state["proposal_packet"] = proposal_payload
-                public_payload["proposal_packet"] = proposal_payload
-                metrics["proposal_generated"] = True
+                # Store the proposal packet in the pipeline state and public payload
+                updated_state["generated_api"] = getattr(brief, "summary", {})
+                public_payload["proposal_packet"] = getattr(brief, "summary", {})
+                metrics["proposal_packet"] = True
+                self.core.add_stage_note("ASI", f"Proposal packet generated with prefix {packet_prefix}")
             except Exception as exc:
-                self.core.add_stage_note("ASI", f"Proposal generation failed: {exc}", "WARN")
+                self.core.add_stage_note("ASI", f"Proposal packet generation failed: {exc}", "WARN")
+        # Ensure StageResult is always returned
+        return StageResult(
+            updated_state=updated_state,
+            metrics=metrics,
+            message="ASI stage completed",
+            public_payload=public_payload,
+        )
 
-        message = "ASI operational" if self._asi.status == "active" else "ASI requires attention"
-        return StageResult(updated_state=updated_state, metrics=metrics, message=message, public_payload=public_payload)
-
-    def _build_summary(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        summary: Dict[str, Any] = {}
-        if "alba_summary" in state:
-            summary["alba"] = state["alba_summary"]
-        if "albi_recommendations" in state:
-            summary["albi"] = state["albi_recommendations"]
-        if "jona_alignment" in state:
-            summary["jona"] = state["jona_alignment"]
-        if "asi_operational" in state:
-            summary["asi"] = state["asi_operational"]
-        if "reproduction_meta" in state:
-            summary["metadata"] = state["reproduction_meta"]
+    def _build_summary(self, pipeline_state: dict, stage_reports: list) -> dict:
+        """Aggregate a summary from the pipeline state and stage reports."""
+        summary = {}
+        # ALBA summary
+        alba_summary = pipeline_state.get("alba_summary", {})
+        summary["alba"] = {
+            "frames_ingested": alba_summary.get("frames_ingested", 0),
+            "source_files": alba_summary.get("source_files", 0),
+        }
+        # ALBI summary
+        albi_insight = pipeline_state.get("albi_insight")
+        if albi_insight is not None:
+            summary["albi"] = {
+                "anomalies": list(getattr(albi_insight, "anomalies", [])),
+                "summary": getattr(albi_insight, "summary", {}),
+                "source_frame_count": getattr(albi_insight, "source_frame_count", 0),
+            }
+        else:
+            summary["albi"] = {}
+        # JONA summary
+        jona_alignment = pipeline_state.get("jona_alignment", {})
+        summary["jona"] = {
+            "status": jona_alignment.get("status"),
+            "alignment_score": jona_alignment.get("alignment_score"),
+            "focus_channels": jona_alignment.get("focus_channels"),
+        }
+        # ASI summary
+        asi_operational = pipeline_state.get("asi_operational", {})
+        summary["asi"] = {
+            "health_score": asi_operational.get("health_score"),
+            "asi_status": asi_operational.get("asi_status"),
+            "generated_api": asi_operational.get("generated_api") if "generated_api" in asi_operational else None,
+        }
+        # Proposal packet if present
+        if "generated_api" in pipeline_state:
+            summary["asi"]["proposal_packet"] = pipeline_state["generated_api"]
+        # Add metadata if present
+        if "reproduction_meta" in pipeline_state:
+            summary["metadata"] = pipeline_state["reproduction_meta"]
         return summary
-
 
 class ReproductionScheduler:
     """Lightweight scheduler that loops the reproduction pipeline."""
@@ -898,6 +982,7 @@ class ReproductionScheduler:
         self._thread: Optional[threading.Thread] = None
         self._last_result: Optional[Dict[str, Any]] = None
         self._cycle_count = 0
+        self.started_at = datetime.now(timezone.utc).isoformat()
 
     def start(self) -> None:
         if self.is_running:
@@ -933,70 +1018,12 @@ class ReproductionScheduler:
             try:
                 result = self.core.run_reproduction_cycle(data_root=self.data_root)
                 self._last_result = result
-                self._cycle_count += 1
-                if callable(self.callback):
-                    try:
-                        self.callback(result)
-                    except Exception as exc:
-                        self.core.log_event("AGIEM", f"Scheduler callback failed: {exc}", "WARN")
-            except Exception as exc:  # pragma: no cover - defensive guard
-                self.core.log_event("AGIEM", f"Scheduler cycle failed: {exc}", "ERROR")
-
-            elapsed = time.time() - start
-            wait_for = max(0.0, self.interval_seconds - elapsed)
-            if wait_for == 0:
-                continue
-            self._stop_event.wait(wait_for)
-
-    def compute_cluster_health(self) -> float:
-        known = self.nodes.values()
-        active = sum(1 for n in known if n.get("status") == "active")
-        total = len(self.nodes)
-        return round((active / total) * 100.0, 2)
-
-    def system_overview(self) -> Dict[str, Any]:
-        return {
-            "started_at": self.started_at,
-            "nodes": self.nodes,
-            "cluster_health_percent": self.compute_cluster_health(),
-            "reproduction_stages": self.reproduction_inventory(),
-            "reproduction_cycle_count": len(self.reproduction_history),
-            "last_reproduction_cycle": self.reproduction_history[-1] if self.reproduction_history else None,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        }
-
+            except Exception as exc:
+                self.core.log_event("AGIEM", f"Reproduction cycle failed in scheduler: {exc}", "ERROR")
     # ---------------------------
     # Log analysis (simple, real)
     # ---------------------------
-    def analyze_logs(self, log_path: str, tail: int = 200) -> Dict[str, Any]:
-        """Scan log files under `log_path` and extract recent ERROR/WARNING lines.
-
-        Returns a summary dict with counts and sample lines. This is intentionally
-        conservative: it does not parse proprietary formats.
-        """
-        log_dir = Path(log_path)
-        if not log_dir.exists() or not log_dir.is_dir():
-            self.log_event("AGIEM", f"Log directory not found: {log_path}", "WARN")
-            return {"anomalies_count": 0, "samples": []}
-
-        anomalies: List[str] = []
-        try:
-            for file in sorted(log_dir.glob("*.log")):
-                try:
-                    with file.open("r", encoding="utf-8", errors="ignore") as fh:
-                        lines = fh.readlines()[-tail:]
-                        for ln in lines:
-                            if any(k in ln for k in ("ERROR", "CRIT", "FAIL", "Exception")):
-                                anomalies.append(f"{file.name}: {ln.strip()}")
-                except Exception as e_file:
-                    logger.debug(f"Could not read log {file}: {e_file}")
-        except Exception as e:
-            logger.exception("Unhandled exception during analyze_logs")
-
-        sample = anomalies[-10:]
-        report = {"anomalies_count": len(anomalies), "samples": sample}
-        self.log_event("AGIEM", f"Log analysis: {report['anomalies_count']} anomalies found")
-        return report
+    # (Moved to AGIEMCore)
 
     # ---------------------------
     # Backup (safe, non-destructive)
@@ -1009,7 +1036,7 @@ class ReproductionScheduler:
         source = Path(path)
         if not source.exists():
             msg = f"Backup source not found: {path}"
-            self.log_event("AGIEM", msg, "ERROR")
+            self.core.log_event("AGIEM", msg, "ERROR")
             return {"error": msg}
 
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -1025,10 +1052,10 @@ class ReproductionScheduler:
                         arcname = str(Path(root).relative_to(source) / fname)
                         zf.write(fpath, arcname)
             size = Path(out_file).stat().st_size
-            self.log_event("AGIEM", f"Backup created: {out_file} ({size} bytes)")
+            self.core.log_event("AGIEM", f"Backup created: {out_file} ({size} bytes)")
             return {"backup_file": out_file, "size_bytes": size}
         except Exception as exc:
-            self.log_event("AGIEM", f"Backup failed: {exc}", "ERROR")
+            self.core.log_event("AGIEM", f"Backup failed: {exc}", "ERROR")
             return {"error": str(exc)}
 
 
@@ -1208,7 +1235,18 @@ def main(argv: Optional[List[str]] = None):
     core = AGIEMCore()
 
     if args.cmd == "status":
-        overview = core.system_overview()
+        overview = {
+            "started_at": core.started_at,
+            "nodes": core.nodes,
+            "cluster_health_percent": (
+                sum(1 for n in core.nodes.values() if n.get("status") == "active") / len(core.nodes) * 100.0
+                if core.nodes else 0.0
+            ),
+            "reproduction_stages": core.reproduction_inventory(),
+            "reproduction_cycle_count": len(core.reproduction_history),
+            "last_reproduction_cycle": core.reproduction_history[-1] if core.reproduction_history else None,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
         print(json.dumps(overview, indent=2, ensure_ascii=False))
         return 0
 

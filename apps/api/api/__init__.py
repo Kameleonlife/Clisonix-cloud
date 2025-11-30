@@ -1,5 +1,1 @@
-# api package initializer
-# Author: Ledjan Ahmati
-# License: Closed Source
-
-# This file marks the folder as a Python package.
+# __init__.py for the api package

@@ -17,7 +17,7 @@ export async function GET() {
 
     const payload = await upstream.json()
     return NextResponse.json({ success: true, data: payload })
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('[system-status] using fallback payload:', error)
     const fallback = {
       core_services: 'Degraded',

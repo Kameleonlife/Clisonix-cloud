@@ -13,3 +13,7 @@ SpeechRecognition
 pydub
 edge-tts
 requests
+reportlab
+pydantic-settings
+httpx
+cbor2

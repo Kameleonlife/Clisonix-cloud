@@ -1,8 +1,16 @@
-from reportlab.lib.pagesizes import A4
-from reportlab.pdfgen import canvas
 from datetime import datetime
 import json
 from pathlib import Path
+
+# Lazy import reportlab - only when needed
+try:
+    from reportlab.lib.pagesizes import A4
+    from reportlab.pdfgen import canvas
+    _REPORTLAB_AVAILABLE = True
+except ImportError:
+    _REPORTLAB_AVAILABLE = False
+    A4 = None
+    canvas = None
 
 BASE = Path(__file__).resolve().parent
 RUNTIME = BASE / "runtime"
@@ -11,6 +19,9 @@ SCAN_FILE = RUNTIME / "scan_results.json"
 REPORTS = RUNTIME / "reports"
 
 def generate_pdf_report():
+    if not _REPORTLAB_AVAILABLE:
+        raise ImportError("reportlab not installed. Install with: pip install reportlab")
+    
     REPORTS.mkdir(exist_ok=True)
     report_name = f"clisonix_report_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.pdf"
     report_path = REPORTS / report_name

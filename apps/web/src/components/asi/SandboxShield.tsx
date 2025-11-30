@@ -36,7 +36,7 @@ export function SandboxShield({ className }: SandboxShieldProps) {
 
   const getThreatLevelColor = (level: string) => {
     switch (level) {
-      case 'low': return 'success';
+      case 'low': return 'active';
       case 'medium': return 'warning';
       case 'high': return 'error';
       default: return 'active';
@@ -91,7 +91,7 @@ export function SandboxShield({ className }: SandboxShieldProps) {
         <div className="flex items-center justify-between">
           <span className="text-sm text-gray-300">Niveli i Kërcënimit:</span>
           <div className={statusBadge({ 
-            status: getThreatLevelColor(sandbox.threatLevel) as any,
+            status: getThreatLevelColor(sandbox.threatLevel),
             size: 'md'
           })}>
             {sandbox.threatLevel.toUpperCase()}
