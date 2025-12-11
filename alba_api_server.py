@@ -17,7 +17,19 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+# OpenTelemetry imports
+from tracing import setup_tracing, instrument_fastapi_app, instrument_http_clients
+
+# Initialize tracing
+tracer = setup_tracing("alba-api")
+
 app = FastAPI(title="ALBA API Server", version="1.0.0")
+
+# Instrument FastAPI app for automatic tracing
+instrument_fastapi_app(app, "alba-api")
+
+# Instrument HTTP clients
+instrument_http_clients()
 
 app.add_middleware(
     CORSMiddleware,
@@ -45,43 +57,57 @@ def save_frame(frame: dict[str, object]) -> Path:
 
 @app.post("/alba/frame", response_model=None)
 async def post_frame(request: Request) -> JSONResponse:
-    try:
-        payload = await request.json()
-    except Exception as exc:  # pragma: no cover - input validation
-        return JSONResponse({"status": "error", "message": f"Invalid JSON: {exc}"}, status_code=400)
+    with tracer.start_as_current_span("post_frame") as span:
+        try:
+            payload = await request.json()
+            span.set_attribute("frame_received", True)
+        except Exception as exc:  # pragma: no cover - input validation
+            span.set_attribute("error", True)
+            span.set_attribute("error.message", str(exc))
+            return JSONResponse({"status": "error", "message": f"Invalid JSON: {exc}"}, status_code=400)
 
-    try:
-        saved_path = save_frame(payload)
-    except Exception as exc:  # pragma: no cover - filesystem safety
-        return JSONResponse({"status": "error", "message": str(exc)}, status_code=500)
+        try:
+            saved_path = save_frame(payload)
+            span.set_attribute("saved_path", str(saved_path))
+        except Exception as exc:  # pragma: no cover - filesystem safety
+            span.set_attribute("error", True)
+            span.set_attribute("error.message", str(exc))
+            return JSONResponse({"status": "error", "message": str(exc)}, status_code=500)
 
-    return JSONResponse(
-        {
-            "status": "ok",
-            "message": f"Frame saved at {saved_path}",
-            "timestamp": _timestamp(),
-        }
-    )
+        return JSONResponse(
+            {
+                "status": "ok",
+                "message": f"Frame saved at {saved_path}",
+                "timestamp": _timestamp(),
+            }
+        )
 
 
 @app.get("/alba/latest", response_model=None)
 def get_latest() -> JSONResponse:
-    try:
-        files = sorted(DATA_DIR.glob("frame_*.json"), key=os.path.getmtime, reverse=True)
-    except Exception as exc:  # pragma: no cover - glob failure guard
-        return JSONResponse({"status": "error", "message": str(exc)}, status_code=500)
+    with tracer.start_as_current_span("get_latest") as span:
+        try:
+            files = sorted(DATA_DIR.glob("frame_*.json"), key=os.path.getmtime, reverse=True)
+            span.set_attribute("files_found", len(files))
+        except Exception as exc:  # pragma: no cover - glob failure guard
+            span.set_attribute("error", True)
+            span.set_attribute("error.message", str(exc))
+            return JSONResponse({"status": "error", "message": str(exc)}, status_code=500)
 
-    if not files:
-        return JSONResponse({"status": "no-data", "message": "No frames found"})
+        if not files:
+            return JSONResponse({"status": "no-data", "message": "No frames found"})
 
-    latest_file = files[0]
-    try:
-        with latest_file.open("r", encoding="utf-8") as handle:
-            frame = json.load(handle)
-    except Exception as exc:
-        return JSONResponse({"status": "error", "message": f"Failed to read {latest_file.name}: {exc}"}, status_code=500)
+        latest_file = files[0]
+        try:
+            with latest_file.open("r", encoding="utf-8") as handle:
+                frame = json.load(handle)
+                span.set_attribute("file_name", latest_file.name)
+        except Exception as exc:
+            span.set_attribute("error", True)
+            span.set_attribute("error.message", str(exc))
+            return JSONResponse({"status": "error", "message": f"Failed to read {latest_file.name}: {exc}"}, status_code=500)
 
-    return JSONResponse({"status": "ok", "frame": frame, "file": latest_file.name})
+        return JSONResponse({"status": "ok", "frame": frame, "file": latest_file.name})
 
 
 @app.get("/")

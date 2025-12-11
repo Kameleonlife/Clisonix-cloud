@@ -1,53 +1,45 @@
-# 🚀 CLISONIX CLOUD – STARTUP & EXECUTION GUIDE
+# 🚀 Clisonix Cloud - Complete Startup & Postman Guide
 
-**Complete System Launch + Postman Testing Cycle**
+**Industrial-Grade Neuroacoustic Processing Platform**
 
-**Version**: 1.1.0  
-**Date**: 30 November 2025  
-**Organization**: UltraWebThinking / Euroweb  
-
----
-
-## 📋 TABLE OF CONTENTS
-
-1. [Pre-Launch Checklist](#pre-launch-checklist)
-2. [Deployment Strategy](#deployment-strategy)
-3. [Backend Implementation](#backend-implementation)
-4. [Postman Testing Cycle](#postman-testing-cycle)
-5. [Launch Procedures](#launch-procedures)
-6. [Monitoring & Support](#monitoring--support)
+**Version**: 2.0.0  
+**Date**: December 5, 2025  
+**Organization**: WEB8euroweb GmbH - Ledjan Ahmati  
 
 ---
 
-## ✅ PRE-LAUNCH CHECKLIST
+## ✅ CURRENT SYSTEM STATUS
 
-### Infrastructure Requirements (Week 1)
+| Component | Status | URL | Port |
+|-----------|--------|-----|------|
+| Frontend | ✅ Running | http://localhost:3003 | 3003 |
+| Backend API | ✅ Running | http://localhost:8000 | 8000 |
+| Docker Services | ⏸️ Stopped | - | - |
+| Grafana | ⏸️ Docker required | http://localhost:3001 | 3001 |
+| Prometheus | ⏸️ Docker required | http://localhost:9090 | 9090 |
 
-- [ ] **API Server Infrastructure**
-  - [ ] Cloud provider selected (AWS/Azure/GCP)
-  - [ ] Servers provisioned (production + staging)
-  - [ ] Database configured (PostgreSQL recommended)
-  - [ ] Redis cache setup (for tokens & sessions)
-  - [ ] SSL certificates installed (HTTPS only)
+---
 
-- [ ] **Authentication Backend**
-  - [ ] JWT signing keys generated
-  - [ ] Refresh token storage configured
-  - [ ] API key generation system ready
-  - [ ] Rate limiting implemented
-  - [ ] Token expiration rules set
+## 🚀 QUICK START
 
-- [ ] **Monitoring & Logging**
-  - [ ] Application logging setup
-  - [ ] Error tracking (Sentry/DataDog)
-  - [ ] Performance monitoring (New Relic/Datadog)
-  - [ ] Log aggregation (ELK stack)
-  - [ ] Alerts configured
+### Start All Services
+```powershell
+.\start-full-stack.ps1
+```
 
-- [ ] **Security Hardening**
-  - [ ] CORS headers configured
-  - [ ] Rate limiting per IP
-  - [ ] DDoS protection enabled
+### Start Docker Stack
+```powershell
+.\start-docker-stack.ps1 -Service all
+```
+
+### Check Service Status
+```powershell
+.\start-docker-stack.ps1 -Service status
+```
+
+---
+
+## 🧪 POSTMAN TESTING
   - [ ] SQL injection prevention
   - [ ] Request validation middleware
 

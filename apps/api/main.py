@@ -78,8 +78,8 @@ async def youtube_insight(video_id: str):
     """
 
     try:
-        from backend.integrations.youtube import _get_json
-        from backend.neuro.youtube_insight_engine import YouTubeInsightEngine
+        from apps.api.integrations.youtube import _get_json
+        from apps.api.neuro.youtube_insight_engine import YouTubeInsightEngine
         import httpx
 
         engine = YouTubeInsightEngine()
@@ -126,7 +126,7 @@ async def daily_energy_check(file: UploadFile = File(...)):
     """
     try:
         import tempfile
-        from backend.neuro.energy_engine import EnergyEngine
+        from apps.api.neuro.energy_engine import EnergyEngine
 
         # Save audio sample
         with tempfile.NamedTemporaryFile(delete=False, suffix=file.filename) as tmp:
@@ -169,7 +169,7 @@ async def generate_moodboard(
     """
     try:
         import tempfile
-        from backend.neuro.moodboard_engine import MoodboardEngine
+        from apps.api.neuro.moodboard_engine import MoodboardEngine
 
         engine = MoodboardEngine()
 
@@ -220,12 +220,12 @@ async def generate_brainsync_music(
             audio_path = tmp.name
 
         # Step 1: run HPS (personality scan)
-        from backend.neuro.hps_engine import HPSEngine
+        from apps.api.neuro.hps_engine import HPSEngine
         hps = HPSEngine()
         profile = hps.scan(audio_path)
 
         # Step 2: generate brain-sync music
-        from backend.neuro.brainsync_engine import BrainSyncEngine
+        from apps.api.neuro.brainsync_engine import BrainSyncEngine
         sync = BrainSyncEngine()
 
         output_path = sync.generate(mode, profile)
@@ -265,7 +265,7 @@ async def harmonic_personality_scan(file: UploadFile = File(...)):
             tmp.write(audio_bytes)
             audio_path = tmp.name
 
-        from backend.neuro.hps_engine import HPSEngine
+        from apps.api.neuro.hps_engine import HPSEngine
         hps = HPSEngine()
         result = hps.scan(audio_path)
 
@@ -332,7 +332,7 @@ async def brain_sync(
             harmony = await cog.analyze_harmony(audio_path)
 
             # 2b. Real MIDI conversion
-            from backend.neuro.audio_to_midi import AudioToMidi
+            from apps.api.neuro.audio_to_midi import AudioToMidi
             converter = AudioToMidi()
             midi_temp = tempfile.NamedTemporaryFile(delete=False, suffix=".mid")
             midi_path = midi_temp.name

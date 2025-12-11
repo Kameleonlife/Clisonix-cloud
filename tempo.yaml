@@ -1,0 +1,49 @@
+server:
+  http_listen_port: 3200
+  grpc_listen_port: 4317
+
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        http:
+          endpoint: 0.0.0.0:4318
+        grpc:
+          endpoint: 0.0.0.0:4317
+
+ingester:
+  max_block_duration: 10m
+  lifecycler:
+    ring:
+      replication_factor: 1
+
+storage:
+  trace:
+    backend: local
+    local:
+      path: /var/tempo/traces
+    wal:
+      path: /var/tempo/wal
+    cache: memcached
+    memcached:
+      consistent_hash: true
+      batch_size: 1024
+      parallelism: 100
+      update_interval: 1m
+      max_idle_conns: 100
+
+# Retention policy: keep traces for 24 hours
+retention: 24h
+
+# Metrics configuration
+metrics:
+  enabled: true
+  per_tenant_state: true
+
+# Logger configuration
+logger:
+  level: info
+
+# Query configuration
+query:
+  max_search_bytes: 50000000

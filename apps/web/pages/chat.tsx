@@ -1,6 +1,4 @@
-﻿'use client';
-
-import Head from 'next/head';
+﻿import Head from 'next/head';
 import LiveChatTools from '../components/LiveChatTools';
 import React, { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
@@ -163,3 +161,9 @@ const ChatPage = () => {
 };
 
 export default ChatPage;
+
+export async function getServerSideProps() {
+  return {
+    props: {},
+  };
+}

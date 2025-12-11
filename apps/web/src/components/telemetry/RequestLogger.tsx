@@ -61,7 +61,15 @@ export function RequestLogger() {
         return response;
       } catch (error) {
         const duration = Math.round(performance.now() - start);
-        console.error(`${logPrefix} ✖ failed after ${duration}ms`, error);
+        const err = error instanceof Error ? error : new Error(String(error));
+        const message = `${logPrefix} ✖ failed after ${duration}ms`;
+
+        if (err.name === "TypeError" && err.message.toLowerCase().includes("failed to fetch")) {
+          console.warn(message, err);
+        } else {
+          console.error(message, err);
+        }
+
         throw error;
       }
     };

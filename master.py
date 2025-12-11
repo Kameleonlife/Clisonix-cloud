@@ -10,7 +10,14 @@ import logging
 import time
 from industrial_data import router as industrial_router
 
-app = FastAPI(title="Clisonix Industrial API", description="Industrial backend for monitoring, logging, and control.")
+app = FastAPI(
+    title="Clisonix Master Orchestrator",
+    version="1.0.0",
+    description="Central coordination of all agents and workflow management",
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json"
+)
 app.include_router(industrial_router)
 
 # Industrial system status endpoint

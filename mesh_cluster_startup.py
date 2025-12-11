@@ -13,6 +13,7 @@ REAL LAUNCHER â€¢ NO MOCK â€¢ NO RANDOM â€¢ NO PLACEHOLDER
 from datetime import datetime
 from pathlib import Path
 import os
+import sys
 import signal
 import subprocess
 import time
@@ -20,9 +21,20 @@ from typing import Dict
 
 import psutil
 
-from Clisonix.colored_logger import setup_logger
+# Add project root to path for imports
+sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).parent / "apps" / "api"))
 
-BASE_DIR = Path(r"C:\Clisonix-cloud")
+try:
+    from Clisonix.colored_logger import setup_logger
+except ImportError:
+    # Fallback logger if module not found
+    import logging
+    def setup_logger(name):
+        logging.basicConfig(level=logging.INFO, format='%(asctime)s | %(levelname)s | %(name)s | %(message)s')
+        return logging.getLogger(name)
+
+BASE_DIR = Path(__file__).parent
 LOGS_DIR = BASE_DIR / "logs"
 os.makedirs(LOGS_DIR, exist_ok=True)
 

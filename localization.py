@@ -1,4 +1,5 @@
-﻿"""Lightweight localization utilities for Clisonix runtimes."""
+﻿# -*- coding: utf-8 -*-
+"""Lightweight localization utilities for Clisonix runtimes."""
 
 from __future__ import annotations
 
@@ -31,17 +32,17 @@ _DEFAULT_TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "status.state.operational": "Operativ",
         "status.state.degraded": "I degraduar",
         "analysis.header": "ðŸ“Š Analiza e sistemit ({duration_ms}ms)",
-        "analysis.insight.none": "ðŸ’¡ Albi: Sistemi Ã«shtÃ« i qÃ«ndrueshÃ«m.",
-        "analysis.insight.some": "ðŸ’¡ Albi: Zbuluar anomali qÃ« kÃ«rkojnÃ« inspektim.",
-        "health.header": "ðŸ’š ShÃ«ndeti i sistemit",
-        "insight.cpu_high": "ðŸ’¡ Albi: CPU Ã«shtÃ« mbi 85%. Sugjeroj reduktim tÃ« ngarkesÃ«s ose caching.",
-        "insight.ram_high": "ðŸ’¡ Albi: RAM po shkon drejt limitit. Sugjeroj optimizim tÃ« proceseve.",
-        "insight.disk_high": "ðŸ’¡ Albi: Disku Ã«shtÃ« pothuajse plot. Rekomandohet pastrim.",
-        "insight.health_stable": "ðŸ’¡ Albi: ShÃ«ndeti i pÃ«rgjithshÃ«m Ã«shtÃ« i qÃ«ndrueshÃ«m.",
-        "insight.good": "ðŸ’¡ Albi: Gjendje e mirÃ«, pa anomali tÃ« dukshme.",
-        "optimization.header": "âš¡ Optimizimi i sistemit",
-        "optimization.insight": "ðŸ’¡ Albi: Performanca u pÃ«rmirÃ«sua me {gain:.2f}% pas optimizimit.",
-        "backup.header.success": "ðŸ’¾ Backup i kryer me sukses",
+        "analysis.insight.none": "💡 Albi: Sistemi është i qëndrueshëm.",
+        "analysis.insight.some": "💡 Albi: Zbuluar anomali që kërkojnë inspektim.",
+        "health.header": "🏥 Shëndeti i sistemit",
+        "insight.cpu_high": "💡 Albi: CPU është mbi 85%. Sugjeroj reduktim të ngarkesës ose caching.",
+        "insight.ram_high": "💡 Albi: RAM po shkon drejt limitit. Sugjeroj optimizim të proceseve.",
+        "insight.disk_high": "💡 Albi: Disku është pothuajse plot. Rekomandohet pastrim.",
+        "insight.health_stable": "💡 Albi: Shëndeti i përgjithshëm është i qëndrueshëm.",
+        "insight.good": "💡 Albi: Gjendje e mirë, pa anomali të dukshme.",
+        "optimization.header": "⚡ Optimizimi i sistemit",
+        "optimization.insight": "💡 Albi: Performanca u përmirësua me {gain:.2f}% pas optimizimit.",
+        "backup.header.success": "💾 Backup i kryer me sukses",
         "backup.header.short": "ðŸ’¾ Backup",
         "backup.insight.none": "ðŸ’¡ Albi: AsnjÃ« dosje 'data' pÃ«r t'u ruajtur.",
         "backup.insight.success": "ðŸ’¡ Albi: {size_gb} GB tÃ« ruajtura me sukses.",

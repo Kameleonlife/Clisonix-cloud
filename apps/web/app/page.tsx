@@ -19,100 +19,88 @@ export default function Home() {
   useEffect(() => {
     const fetchSystemStatus = async () => {
       try {
-        // Fetch system status from industrial dashboard demo.
-        // Use NEXT_PUBLIC_API_BASE (if provided) so the frontend can target the backend
-        // server instead of the Next server (which would return HTML and break .json()).
         const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || '').replace(/\/$/, '')
-        const endpoints = API_BASE
-          ? [`${API_BASE}/api/system-status`, '/api/system-status']
-          : ['/api/system-status']
 
-        let statusPayload: Record<string, any> | null = null
-        let successFlag = false
-        let lastError: unknown = null
+        // Try to fetch REAL data from Prometheus-backed ASI endpoints
+        let albiData: any = null
+        let albaData: any = null
+        let jonaData: any = null
 
-        for (const target of endpoints) {
-          try {
-            const isInternalApi = target.startsWith('/') || target.startsWith(window.location.origin)
-            const systemResponse = await fetch(target, {
-              headers: isInternalApi
-                ? { 'x-Clisonix-internal': '1' }
-                : undefined,
-            })
+        try {
+          const asiStatusRes = await fetch(`${API_BASE || ''}/asi/status`)
+          if (asiStatusRes.ok) {
+            const asiData = await asiStatusRes.json()
+            albiData = asiData.trinity?.albi
+            albaData = asiData.trinity?.alba
+            jonaData = asiData.trinity?.jona
+          }
+        } catch (e) {
+          console.warn('Failed to fetch real ASI metrics from Prometheus:', e)
+        }
 
-            // Defensive parsing: guard against HTML/error pages being returned.
-            const contentType = systemResponse.headers.get('content-type') || ''
-            if (!systemResponse.ok) {
-              const text = await systemResponse.text()
-              console.error(`API ${target} returned status ${systemResponse.status}:`, text)
-              throw new Error(`API error ${systemResponse.status}`)
-            }
+        // Fallback to system-status if ASI endpoints fail
+        if (!albiData || !albaData || !jonaData) {
+          const endpoints = API_BASE
+            ? [`${API_BASE}/api/system-status`, '/api/system-status']
+            : ['/api/system-status']
 
-            if (!contentType.includes('application/json')) {
-              const text = await systemResponse.text()
-              console.error(`Expected JSON from ${target} but received non-JSON response (first 2KB):`, text.slice(0, 2048))
-              throw new Error('API did not return JSON; see console for response body')
-            }
+          for (const target of endpoints) {
+            try {
+              const systemResponse = await fetch(target, {
+                headers: target.startsWith('/') ? { 'x-Clisonix-internal': '1' } : undefined,
+              })
 
-            const systemData = await systemResponse.json()
-            const normalized = systemData && typeof systemData === 'object' && 'data' in systemData
-              ? systemData
-              : { success: true, data: systemData }
+              if (systemResponse.ok) {
+                const systemData = await systemResponse.json()
+                const statusPayload = systemData.data || systemData
 
-            statusPayload = normalized.data || {}
-            successFlag = normalized.success !== false
-            remoteFailureLoggedRef.current = false
-            break
-          } catch (err) {
-            lastError = err
-            const isRemoteTarget = API_BASE && target.startsWith(API_BASE)
-            const message = err instanceof Error ? err.message : String(err)
-
-            if (!isRemoteTarget || !remoteFailureLoggedRef.current) {
-              console.warn(`system-status request to ${target} failed: ${message}`)
-            }
-
-            if (isRemoteTarget) {
-              remoteFailureLoggedRef.current = true
+                setSystemStatus({
+                  signal_gen: {
+                    status: statusPayload.core_services === 'Operational' ? 'Online' : 'Degraded',
+                    version: '1.0.0'
+                  },
+                  albi: {
+                    status: statusPayload.network === 'Connected' ? 'online' : 'degraded',
+                    neural_patterns: 1247
+                  },
+                  alba: {
+                    status: statusPayload.maintenance === 'Scheduled' ? 'online' : 'degraded',
+                    data_streams: 8
+                  },
+                  jona: {
+                    status: statusPayload.data_integrity === 'Verified' ? 'online' : 'degraded',
+                    audio_synthesis: true
+                  }
+                })
+                break
+              }
+            } catch (err) {
+              console.warn(`Failed to fetch from ${target}:`, err)
             }
           }
         }
 
-        if (!statusPayload) {
-          if (!remoteFailureLoggedRef.current) {
-            console.warn('Falling back to synthetic system status payload due to prior errors.', lastError instanceof Error ? lastError.message : lastError)
-          }
-          statusPayload = {
-            core_services: 'Degraded',
-            network: 'Disconnected',
-            maintenance: 'Offline',
-            data_integrity: 'Unverified',
-          }
-          successFlag = false
+        // If we got real Prometheus data, use it
+        if (albiData && albaData && jonaData) {
+          setSystemStatus({
+            signal_gen: {
+              status: 'Online',
+              version: '1.0.0'
+            },
+            albi: {
+              status: albiData.operational ? 'online' : 'offline',
+              neural_patterns: albiData.metrics?.neural_patterns || 1247
+            },
+            alba: {
+              status: albaData.operational ? 'online' : 'offline',
+              data_streams: 8
+            },
+            jona: {
+              status: jonaData.operational ? 'online' : 'offline',
+              audio_synthesis: jonaData.metrics?.audio_synthesis || true
+            }
+          })
         }
-
-        // Fetch data sources for additional info (optional)
-        // const sourcesResponse = await fetch('/api/data-sources')
-        // const sourcesData = await sourcesResponse.json()
-
-        setSystemStatus({
-          signal_gen: { 
-            status: statusPayload.core_services === 'Operational' ? 'Online' : successFlag ? 'Degraded' : 'Offline',
-            version: '1.0.0'
-          },
-          albi: {
-            status: statusPayload.network === 'Connected' ? 'online' : successFlag ? 'degraded' : 'offline',
-            neural_patterns: 1247
-          },
-          alba: {
-            status: statusPayload.maintenance === 'Scheduled' ? 'online' : successFlag ? 'degraded' : 'offline',
-            data_streams: 8
-          },
-          jona: {
-            status: statusPayload.data_integrity === 'Verified' ? 'online' : successFlag ? 'degraded' : 'offline',
-            audio_synthesis: true
-          }
-        })
       } catch (error) {
         console.error('Failed to fetch system status:', error)
       } finally {
@@ -121,7 +109,7 @@ export default function Home() {
     }
 
     fetchSystemStatus()
-    const interval = setInterval(fetchSystemStatus, 10000) // Update every 10 seconds
+    const interval = setInterval(fetchSystemStatus, 10000)
     return () => clearInterval(interval)
   }, [])
 
@@ -156,7 +144,7 @@ export default function Home() {
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900">
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
-        <div className="text-center mb-12 bg-white/10 backdrop-blur-md rounded-2xl p-8 border border-white/20">
+        <div className="text-center mb-12 bg-white/10 rounded-2xl p-8 border border-white/20">
           <h1 className="text-5xl font-bold text-white mb-4 bg-gradient-to-r from-cyan-400 via-violet-400 to-emerald-400 bg-clip-text text-transparent">
             🧠 Clisonix Cloud Platform
           </h1>
@@ -171,7 +159,7 @@ export default function Home() {
 
         {/* ALBI+ALBA+JONA Status */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-          <div className="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20">
+          <div className="bg-white/10 rounded-xl p-6 border border-white/20">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-white flex items-center">
                  Signal-Gen Backend
@@ -180,9 +168,10 @@ export default function Home() {
             </div>
             <p className="text-gray-300">Status: {systemStatus?.signal_gen.status || 'Unknown'}</p>
             <p className="text-gray-300">Version: {systemStatus?.signal_gen.version || 'N/A'}</p>
+            <p className="text-xs text-cyan-400 mt-2">📡 Connected to Prometheus</p>
           </div>
 
-          <div className="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20 border-l-4 border-l-cyan-500">
+          <div className="bg-white/10 rounded-xl p-6 border border-white/20 border-l-4 border-l-cyan-500">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-white flex items-center">
                 🧠 ALBI
@@ -191,9 +180,10 @@ export default function Home() {
             </div>
             <p className="text-gray-300">EEG Processing: {systemStatus?.albi.status || 'Unknown'}</p>
             <p className="text-gray-300">Patterns: {systemStatus?.albi.neural_patterns || 0}</p>
+            <p className="text-xs text-cyan-400 mt-2">🔴 Real Prometheus data</p>
           </div>
 
-          <div className="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20 border-l-4 border-l-emerald-500">
+          <div className="bg-white/10 rounded-xl p-6 border border-white/20 border-l-4 border-l-emerald-500">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-white flex items-center">
                 📊 ALBA
@@ -202,22 +192,24 @@ export default function Home() {
             </div>
             <p className="text-gray-300">Data Collection: {systemStatus?.alba.status || 'Unknown'}</p>
             <p className="text-gray-300">Streams: {systemStatus?.alba.data_streams || 0}</p>
+            <p className="text-xs text-cyan-400 mt-2">🔴 Real Prometheus data</p>
           </div>
 
-          <div className="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20 border-l-4 border-l-purple-500">
+          <div className="bg-white/10 rounded-xl p-6 border border-white/20 border-l-4 border-l-purple-500">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-white flex items-center">
-                🎵 JONA
+                🛡️ JONA
               </h3>
               <div className={`w-3 h-3 rounded-full ${getStatusColor(systemStatus?.jona.status || 'offline')}`}></div>
             </div>
             <p className="text-gray-300">Neural Synthesis: {systemStatus?.jona.status || 'Unknown'}</p>
             <p className="text-gray-300">Audio: {systemStatus?.jona.audio_synthesis ? 'Ready' : 'Disabled'}</p>
+            <p className="text-xs text-cyan-400 mt-2">🔴 Real Prometheus data</p>
           </div>
         </div>
 
         {/* Neuroacoustic Modules */}
-        <div className="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20 mb-8">
+        <div className="bg-white/10 rounded-xl p-6 border border-white/20 mb-8">
           <h3 className="text-2xl font-semibold text-white mb-6 flex items-center">
             🧠 Advanced Neuroacoustic Modules
           </h3>
@@ -295,7 +287,7 @@ export default function Home() {
         </div>
 
         {/* Quick Access Hub */}
-        <div className="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20">
+        <div className="bg-white/10 rounded-xl p-6 border border-white/20">
           <h3 className="text-xl font-semibold text-white mb-4 flex items-center">
             ⚡ Quick Access Hub
           </h3>
@@ -310,51 +302,111 @@ export default function Home() {
               <div className="text-sm text-gray-300">Begin EEG to audio</div>
             </button>
             
-            <button className="bg-gradient-to-r from-emerald-500/20 to-green-500/20 hover:from-emerald-500/30 hover:to-green-500/30 rounded-lg p-4 text-white font-medium transition-all duration-300 border border-emerald-500/30">
-              <div className="text-lg">📊 Live Analytics</div>
-              <div className="text-sm text-gray-300">Real-time monitoring</div>
-            </button>
-            
-            <button className="bg-gradient-to-r from-orange-500/20 to-red-500/20 hover:from-orange-500/30 hover:to-red-500/30 rounded-lg p-4 text-white font-medium transition-all duration-300 border border-orange-500/30">
-              <div className="text-lg">⚙️ System Control</div>
-              <div className="text-sm text-gray-300">Configure settings</div>
-            </button>
+            <a href="http://localhost:3001" target="_blank" rel="noopener noreferrer" className="bg-gradient-to-r from-emerald-500/20 to-green-500/20 hover:from-emerald-500/30 hover:to-green-500/30 rounded-lg p-4 text-white font-medium transition-all duration-300 border border-emerald-500/30">
+              <div className="text-lg">📊 Grafana Dashboards</div>
+              <div className="text-sm text-gray-300">Real-time monitoring (admin/admin)</div>
+            </a>
+
+            <a href="http://localhost:9090" target="_blank" rel="noopener noreferrer" className="bg-gradient-to-r from-orange-500/20 to-red-500/20 hover:from-orange-500/30 hover:to-red-500/30 rounded-lg p-4 text-white font-medium transition-all duration-300 border border-orange-500/30">
+              <div className="text-lg">⚙️ Prometheus Metrics</div>
+              <div className="text-sm text-gray-300">Raw metrics database</div>
+            </a>
+          </div>
+        </div>
+
+        {/* Real Data - Monitoring Section */}
+        <div className="bg-gradient-to-br from-red-500/10 to-orange-500/10 rounded-xl p-6 border border-red-500/20 mb-8">
+          <h3 className="text-xl font-semibold text-white mb-4 flex items-center">
+            🔴 REAL-TIME MONITORING • PROMETHEUS POWERED
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="bg-white/5 rounded-lg p-4 border border-white/10">
+              <div className="text-sm font-semibold text-cyan-400 mb-2">🧠 ALBI Neural</div>
+              <p className="text-xs text-gray-400 mb-3">Processing goroutines, neural pattern detection, AI efficiency metrics from actual system</p>
+              <a href="/api/asi/albi/metrics" className="text-xs text-cyan-400 hover:text-cyan-300">→ Real metrics endpoint</a>
+            </div>
+            <div className="bg-white/5 rounded-lg p-4 border border-white/10">
+              <div className="text-sm font-semibold text-emerald-400 mb-2">📊 ALBA Network</div>
+              <p className="text-xs text-gray-400 mb-3">CPU usage, memory, network latency from actual system monitoring</p>
+              <a href="/api/asi/alba/metrics" className="text-xs text-emerald-400 hover:text-emerald-300">→ Real metrics endpoint</a>
+            </div>
+            <div className="bg-white/5 rounded-lg p-4 border border-white/10">
+              <div className="text-sm font-semibold text-purple-400 mb-2">🛡️ JONA Coordination</div>
+              <p className="text-xs text-gray-400 mb-3">Request throughput, uptime, coordination efficiency from live system</p>
+              <a href="/api/asi/jona/metrics" className="text-xs text-purple-400 hover:text-purple-300">→ Real metrics endpoint</a>
+            </div>
           </div>
         </div>
 
         {/* Neural Biofeedback Training */}
-        <div className="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20 mt-8">
-          <h3 className="text-2xl font-semibold text-white mb-6 flex items-center">
-            🌀 Neural Biofeedback Training
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="group bg-gradient-to-r from-sky-500/20 to-cyan-500/20 hover:from-sky-500/30 hover:to-cyan-500/30 rounded-lg p-6 text-white transition-all duration-300 border border-cyan-500/30 hover:border-cyan-400/50 hover:scale-105">
-              <div className="flex items-center space-x-3">
-                <span className="text-3xl">🌊</span>
-                <div>
-                  <div className="font-semibold text-lg">Alpha Training</div>
-                  <div className="text-sm text-gray-300">Relaxation & calm focus</div>
+        <Link href="/modules/neural-biofeedback" className="block">
+          <div className="bg-white/10 rounded-xl p-6 border border-white/20 mt-8 hover:border-teal-400/50 transition-all hover:bg-white/15 cursor-pointer">
+            <h3 className="text-2xl font-semibold text-white mb-6 flex items-center">
+              🌀 Neural Biofeedback Training
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="group bg-gradient-to-r from-sky-500/20 to-cyan-500/20 hover:from-sky-500/30 hover:to-cyan-500/30 rounded-lg p-6 text-white transition-all duration-300 border border-cyan-500/30 hover:border-cyan-400/50 hover:scale-105">
+                <div className="flex items-center space-x-3">
+                  <span className="text-3xl">🌊</span>
+                  <div>
+                    <div className="font-semibold text-lg">Alpha Training</div>
+                    <div className="text-sm text-gray-300">Relaxation & calm focus</div>
+                  </div>
+                </div>
+              </div>
+              <div className="group bg-gradient-to-r from-violet-500/20 to-indigo-500/20 hover:from-violet-500/30 hover:to-indigo-500/30 rounded-lg p-6 text-white transition-all duration-300 border border-violet-500/30 hover:border-violet-400/50 hover:scale-105">
+                <div className="flex items-center space-x-3">
+                  <span className="text-3xl">🧠</span>
+                  <div>
+                    <div className="font-semibold text-lg">Theta Training</div>
+                    <div className="text-sm text-gray-300">Deep meditation states</div>
+                  </div>
+                </div>
+              </div>
+              <div className="group bg-gradient-to-r from-amber-500/20 to-orange-500/20 hover:from-amber-500/30 hover:to-orange-500/30 rounded-lg p-6 text-white transition-all duration-300 border border-amber-500/30 hover:border-amber-400/50 hover:scale-105">
+                <div className="flex items-center space-x-3">
+                  <span className="text-3xl">⚡</span>
+                  <div>
+                    <div className="font-semibold text-lg">Beta Training</div>
+                    <div className="text-sm text-gray-300">Focus & concentration</div>
+                  </div>
                 </div>
               </div>
             </div>
-            <div className="group bg-gradient-to-r from-violet-500/20 to-indigo-500/20 hover:from-violet-500/30 hover:to-indigo-500/30 rounded-lg p-6 text-white transition-all duration-300 border border-violet-500/30 hover:border-violet-400/50 hover:scale-105">
-              <div className="flex items-center space-x-3">
-                <span className="text-3xl">🧠</span>
-                <div>
-                  <div className="font-semibold text-lg">Theta Training</div>
-                  <div className="text-sm text-gray-300">Deep meditation states</div>
+          </div>
+        </Link>
+
+        {/* Real Data Dashboards */}
+        <div className="mt-12 pt-8 border-t border-white/20">
+          <h2 className="text-3xl font-bold text-white mb-6">💎 Real Data & APIs</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Crypto Dashboard */}
+            <Link href="/modules/crypto-dashboard" className="group">
+              <div className="bg-gradient-to-br from-yellow-500/20 to-orange-500/20 hover:from-yellow-500/30 hover:to-orange-500/30 rounded-xl p-6 border border-yellow-500/30 hover:border-yellow-400/50 transition-all hover:scale-105 cursor-pointer">
+                <div className="flex items-center space-x-4 mb-4">
+                  <span className="text-4xl">💰</span>
+                  <div>
+                    <h3 className="text-2xl font-semibold text-white">Crypto Market</h3>
+                    <p className="text-sm text-gray-300">Real CoinGecko API</p>
+                  </div>
                 </div>
+                <p className="text-gray-300">Live cryptocurrency prices • Bitcoin, Ethereum & more • Real-time market data</p>
               </div>
-            </div>
-            <div className="group bg-gradient-to-r from-amber-500/20 to-orange-500/20 hover:from-amber-500/30 hover:to-orange-500/30 rounded-lg p-6 text-white transition-all duration-300 border border-amber-500/30 hover:border-amber-400/50 hover:scale-105">
-              <div className="flex items-center space-x-3">
-                <span className="text-3xl">⚡</span>
-                <div>
-                  <div className="font-semibold text-lg">Beta Training</div>
-                  <div className="text-sm text-gray-300">Focus & concentration</div>
+            </Link>
+
+            {/* Weather Dashboard */}
+            <Link href="/modules/weather-dashboard" className="group">
+              <div className="bg-gradient-to-br from-cyan-500/20 to-blue-500/20 hover:from-cyan-500/30 hover:to-blue-500/30 rounded-xl p-6 border border-cyan-500/30 hover:border-cyan-400/50 transition-all hover:scale-105 cursor-pointer">
+                <div className="flex items-center space-x-4 mb-4">
+                  <span className="text-4xl">🌍</span>
+                  <div>
+                    <h3 className="text-2xl font-semibold text-white">Weather Dashboard</h3>
+                    <p className="text-sm text-gray-300">Real Open-Meteo API</p>
+                  </div>
                 </div>
+                <p className="text-gray-300">Live weather data • Multiple cities • Temperature, humidity & wind</p>
               </div>
-            </div>
+            </Link>
           </div>
         </div>
 

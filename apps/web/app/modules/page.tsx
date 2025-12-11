@@ -99,6 +99,20 @@ export default function ModulesPage() {
       route: '/modules/industrial-dashboard'
     },
     {
+      id: 'reporting-dashboard',
+      name: '📈 ULTRA Reporting Center',
+      description: 'Excel-style executive dashboard blending Grafana, Prometheus, Datadog and Victoria metrics',
+      status: 'active' as const,
+      capabilities: [
+        'Unified KPI grid with trends',
+        'Live Prometheus history sparklines',
+        'Executive-ready export buttons',
+        'Alert rundown synced with AlertManager',
+        'Synthetic Datadog signal bridge'
+      ],
+      route: '/modules/reporting-dashboard'
+    },
+    {
       id: 'phone-monitor',
       name: '📱 Phone Monitor',
       description: 'Mobile device monitoring and neural interface',
@@ -229,7 +243,15 @@ export default function ModulesPage() {
           <span className="w-2 h-2 bg-yellow-500 rounded-full mr-3 animate-pulse"></span>
           Quick Actions
         </h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+          <Link
+            href="/modules/reporting-dashboard"
+            className="bg-gradient-to-r from-cyan-600/20 to-blue-600/20 hover:from-cyan-600/30 hover:to-blue-600/30 rounded-lg p-4 border border-cyan-500/30 hover:border-cyan-400/50 transition-all duration-300"
+          >
+            <div className="text-sm font-medium text-white">📈 Launch ULTRA Reporting</div>
+            <div className="text-xs text-gray-400 mt-1">Excel-style dashboard & exports</div>
+          </Link>
+
           <Link
             href="/modules/neural-synthesis"
             className="bg-gradient-to-r from-purple-600/20 to-pink-600/20 hover:from-purple-600/30 hover:to-pink-600/30 rounded-lg p-4 border border-purple-500/30 hover:border-purple-400/50 transition-all duration-300"

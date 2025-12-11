@@ -16,18 +16,21 @@ Të gjithë 3 formatet profesionale kanë përfunduar:
 ## 📋 Features Të Specifikimit
 
 ### 🔐 Security
+
 - ✅ Bearer JWT authentication
 - ✅ API Key alternative
 - ✅ OAuth 2.0 Client Credentials
 - ✅ Automatic token in headers
 
 ### 📊 API Coverage
+
 - ✅ 51 endpoints dokumentuar
 - ✅ 16+ request/response schemas
 - ✅ 8 kategorive me tags
 - ✅ Complete error handling
 
 ### 🛠️ Enterprise Features
+
 - ✅ Rate limiting headers
 - ✅ Comprehensive error codes
 - ✅ Request/response examples
@@ -35,6 +38,7 @@ Të gjithë 3 formatet profesionale kanë përfunduar:
 - ✅ Binary file support (CBOR)
 
 ### 📚 Server Environments
+
 - ✅ Local development (`localhost:8000`)
 - ✅ Production (`api.clisonix.cloud`)
 - ✅ Sandbox (`sandbox.clisonix.cloud`)
@@ -56,6 +60,8 @@ newman run clisonix-cloud.postman_collection.json \
 ```
 
 **Variablat në Postman:**
+...
+
 ```json
 baseUrl = http://localhost:8000
 token = your-jwt-token-here
@@ -64,6 +70,7 @@ token = your-jwt-token-here
 ### 2. SDK Generation (Optimal për Developers)
 
 **Python SDK:**
+
 ```bash
 openapi-generator-cli generate \
   -i openapi.yaml \

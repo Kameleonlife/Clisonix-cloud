@@ -9,21 +9,6 @@
 'use client'
 
 import { useState } from 'react'
-// Funksion pÃ«r tÃ« dÃ«rguar pyetje te API reale
-async function askClisonixAPI(question: string) {
-  try {
-    const res = await fetch('/api/ask', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question })
-    });
-    if (!res.ok) throw new Error('API error');
-    const data = await res.json();
-    return data.answer || JSON.stringify(data);
-  } catch (err) {
-    return 'API error: ' + (err instanceof Error ? err.message : String(err));
-  }
-}
 
 export default function OpenWebUIChat() {
   const [messages, setMessages] = useState([
@@ -36,11 +21,11 @@ export default function OpenWebUIChat() {
       const newMessage = { id: Date.now(), text: input, sender: 'user' }
       setMessages(prev => [...prev, newMessage])
       setInput('')
-      // KÃ«rko API reale
-      const botText = await askClisonixAPI(input)
+
+      // Simple placeholder response
       const botResponse = { 
         id: Date.now(), 
-        text: botText, 
+        text: 'Processing your query through Clisonix neural systems...', 
         sender: 'bot' 
       }
       setMessages(prev => [...prev, botResponse])

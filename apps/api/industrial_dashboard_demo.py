@@ -30,7 +30,7 @@ class ActivityLogEntry(BaseModel):
 
 class BulkCollectionRequest(BaseModel):
     dataset: str = Field(..., description="Dataset identifier to collect")
-    priority: str = Field("normal", regex=r"^(low|normal|high)$")
+    priority: str = Field("normal", pattern=r"^(low|normal|high)$")
     retention_hours: int = Field(24, ge=1, le=720)
     notes: Optional[str] = None
 

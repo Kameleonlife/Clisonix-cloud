@@ -1,0 +1,18 @@
+{
+	"ulid": "01KC5RV3TYKPB28WMXM1SEMQ2P",
+	"minTime": 1765405263344,
+	"maxTime": 1765411200000,
+	"stats": {
+		"numSamples": 124288,
+		"numFloatSamples": 124288,
+		"numSeries": 1267,
+		"numChunks": 1301
+	},
+	"compaction": {
+		"level": 1,
+		"sources": [
+			"01KC5RV3TYKPB28WMXM1SEMQ2P"
+		]
+	},
+	"version": 1
+}

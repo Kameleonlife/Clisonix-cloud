@@ -1,0 +1,340 @@
+"""
+ALBA COLLECTOR SERVICE (Port 5555)
+Network telemetry and data collection service
+"""
+
+import asyncio
+import json
+import time
+import logging
+import uuid
+from datetime import datetime, timezone
+from typing import Dict, List, Any, Optional
+from collections import deque
+
+from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+
+# OpenTelemetry imports
+from tracing import setup_tracing, instrument_fastapi_app, instrument_http_clients
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("AlbaCollector")
+
+# Initialize tracing
+tracer = setup_tracing("alba")
+
+app = FastAPI(
+    title="ALBA Collector",
+    version="1.0.0",
+    description="Network telemetry and data collection service",
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json"
+)
+
+# Instrument FastAPI app for automatic tracing
+instrument_fastapi_app(app, "alba")
+
+# Instrument HTTP clients
+instrument_http_clients()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"]
+)
+
+# ═══════════════════════════════════════════════════════════════════
+# DATA STRUCTURES
+# ═══════════════════════════════════════════════════════════════════
+
+class TelemetryEntry(BaseModel):
+    id: str = None
+    source: str
+    type: str
+    payload: Dict[str, Any]
+    timestamp: str = None
+    quality: float = 1.0
+
+class CollectorMetrics(BaseModel):
+    total_entries: int
+    entries_per_second: float
+    average_quality: float
+    sources: Dict[str, int]
+    types: Dict[str, int]
+
+# ═══════════════════════════════════════════════════════════════════
+# GLOBAL STATE
+# ═══════════════════════════════════════════════════════════════════
+
+START_TIME = time.time()
+INSTANCE_ID = uuid.uuid4().hex[:8]
+
+# Ring buffer for telemetry data
+telemetry_buffer: deque = deque(maxlen=10000)
+metrics_snapshot = {
+    "total_entries": 0,
+    "entries_per_second": 0.0,
+    "sources": {},
+    "types": {}
+}
+
+# ═══════════════════════════════════════════════════════════════════
+# ENDPOINTS
+# ═══════════════════════════════════════════════════════════════════
+
+@app.post("/ingest")
+async def ingest_telemetry(entry: TelemetryEntry):
+    """Ingest telemetry from sensors/devices"""
+    with tracer.start_as_current_span("ingest_telemetry") as span:
+        span.set_attribute("source", entry.source)
+        span.set_attribute("type", entry.type)
+        
+        entry.id = entry.id or uuid.uuid4().hex
+        entry.timestamp = entry.timestamp or datetime.now(timezone.utc).isoformat()
+        
+        telemetry_buffer.append(entry.dict())
+        
+        # Update metrics
+        metrics_snapshot["total_entries"] += 1
+        metrics_snapshot["sources"][entry.source] = metrics_snapshot["sources"].get(entry.source, 0) + 1
+        metrics_snapshot["types"][entry.type] = metrics_snapshot["types"].get(entry.type, 0) + 1
+        
+        span.set_attribute("buffer_size", len(telemetry_buffer))
+        
+        logger.info(f"[INGEST] {entry.type} from {entry.source} (total: {len(telemetry_buffer)})")
+        
+        return {
+            "status": "ingested",
+            "id": entry.id,
+            "timestamp": entry.timestamp
+        }
+
+@app.get("/data")
+async def get_telemetry_data(limit: int = 100):
+    """Retrieve collected telemetry"""
+    with tracer.start_as_current_span("get_telemetry_data") as span:
+        span.set_attribute("limit", limit)
+        entries = list(telemetry_buffer)[-limit:]
+        span.set_attribute("entries_returned", len(entries))
+        
+        return {
+            "count": len(entries),
+            "entries": entries,
+            "buffer_size": len(telemetry_buffer),
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+
+@app.get("/metrics")
+async def get_metrics():
+    """Get collector metrics"""
+    with tracer.start_as_current_span("get_metrics") as span:
+        uptime = time.time() - START_TIME
+        eps = metrics_snapshot["total_entries"] / max(uptime, 1)
+        
+        span.set_attribute("uptime_seconds", uptime)
+        span.set_attribute("total_entries", metrics_snapshot["total_entries"])
+        span.set_attribute("entries_per_second", eps)
+        
+        return {
+            "uptime_seconds": uptime,
+            "total_entries": metrics_snapshot["total_entries"],
+            "entries_per_second": eps,
+            "buffer_size": len(telemetry_buffer),
+            "sources": metrics_snapshot["sources"],
+            "types": metrics_snapshot["types"]
+        }
+
+@app.get("/health")
+async def health():
+    """Service health check"""
+    with tracer.start_as_current_span("health_check") as span:
+        uptime = time.time() - START_TIME
+        buffer_capacity = len(telemetry_buffer) / 10000
+        
+        span.set_attribute("status", "operational")
+        span.set_attribute("buffer_capacity", buffer_capacity)
+        
+        return {
+            "service": "alba-collector",
+            "status": "operational",
+            "instance_id": INSTANCE_ID,
+            "uptime_seconds": uptime,
+            "buffer_usage": f"{buffer_capacity*100:.1f}%",
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+
+@app.post("/execute")
+async def execute_action(action: Dict[str, Any]):
+    """Execute service action"""
+    with tracer.start_as_current_span("execute_action") as span:
+        cmd = action.get("action", "")
+        span.set_attribute("action", cmd)
+        
+        if cmd == "clear":
+            telemetry_buffer.clear()
+            return {"status": "buffer_cleared"}
+        elif cmd == "export":
+            return {
+                "status": "exported",
+                "entries": list(telemetry_buffer),
+                "count": len(telemetry_buffer)
+            }
+        else:
+            raise HTTPException(status_code=400, detail="Unknown action")
+
+@app.post("/receive")
+async def receive_packet(packet: Dict[str, Any]):
+    """Receive inter-service communication"""
+    with tracer.start_as_current_span("receive_packet") as span:
+        source = packet.get('source', 'unknown')
+        packet_type = packet.get('packet_type', 'unknown')
+        span.set_attribute("source", source)
+        span.set_attribute("packet_type", packet_type)
+        
+        logger.info(f"[RECEIVE] Packet from {source}: {packet_type}")
+        return {"status": "received", "correlation_id": packet.get("correlation_id")}
+
+if __name__ == "__main__":
+    import uvicorn
+    print("\n╔═════════════════════════════════════════╗")
+    print("║  ALBA COLLECTOR (Port 5555)            ║")
+    print("║  Network Telemetry Service             ║")
+    print("║  📊 With OpenTelemetry Tracing         ║")
+    print("╚═════════════════════════════════════════╝\n")
+    uvicorn.run(app, host="0.0.0.0", port=5555, log_level="info")
+
+# ═══════════════════════════════════════════════════════════════════
+# DATA STRUCTURES
+# ═══════════════════════════════════════════════════════════════════
+
+class TelemetryEntry(BaseModel):
+    id: str = None
+    source: str
+    type: str
+    payload: Dict[str, Any]
+    timestamp: str = None
+    quality: float = 1.0
+
+class CollectorMetrics(BaseModel):
+    total_entries: int
+    entries_per_second: float
+    average_quality: float
+    sources: Dict[str, int]
+    types: Dict[str, int]
+
+# ═══════════════════════════════════════════════════════════════════
+# GLOBAL STATE
+# ═══════════════════════════════════════════════════════════════════
+
+START_TIME = time.time()
+INSTANCE_ID = uuid.uuid4().hex[:8]
+
+# Ring buffer for telemetry data
+telemetry_buffer: deque = deque(maxlen=10000)
+metrics_snapshot = {
+    "total_entries": 0,
+    "entries_per_second": 0.0,
+    "sources": {},
+    "types": {}
+}
+
+# ═══════════════════════════════════════════════════════════════════
+# ENDPOINTS
+# ═══════════════════════════════════════════════════════════════════
+
+@app.post("/ingest")
+async def ingest_telemetry(entry: TelemetryEntry):
+    """Ingest telemetry from sensors/devices"""
+    entry.id = entry.id or uuid.uuid4().hex
+    entry.timestamp = entry.timestamp or datetime.utcnow().isoformat()
+    
+    telemetry_buffer.append(entry.dict())
+    
+    # Update metrics
+    metrics_snapshot["total_entries"] += 1
+    metrics_snapshot["sources"][entry.source] = metrics_snapshot["sources"].get(entry.source, 0) + 1
+    metrics_snapshot["types"][entry.type] = metrics_snapshot["types"].get(entry.type, 0) + 1
+    
+    logger.info(f"[INGEST] {entry.type} from {entry.source} (total: {len(telemetry_buffer)})")
+    
+    return {
+        "status": "ingested",
+        "id": entry.id,
+        "timestamp": entry.timestamp
+    }
+
+@app.get("/data")
+async def get_telemetry_data(limit: int = 100):
+    """Retrieve collected telemetry"""
+    entries = list(telemetry_buffer)[-limit:]
+    return {
+        "count": len(entries),
+        "entries": entries,
+        "buffer_size": len(telemetry_buffer),
+        "timestamp": datetime.utcnow().isoformat()
+    }
+
+@app.get("/metrics")
+async def get_metrics():
+    """Get collector metrics"""
+    uptime = time.time() - START_TIME
+    eps = metrics_snapshot["total_entries"] / max(uptime, 1)
+    
+    return {
+        "uptime_seconds": uptime,
+        "total_entries": metrics_snapshot["total_entries"],
+        "entries_per_second": eps,
+        "buffer_size": len(telemetry_buffer),
+        "sources": metrics_snapshot["sources"],
+        "types": metrics_snapshot["types"]
+    }
+
+@app.get("/health")
+async def health():
+    """Service health check"""
+    uptime = time.time() - START_TIME
+    buffer_capacity = len(telemetry_buffer) / 10000
+    
+    return {
+        "service": "alba-collector",
+        "status": "operational",
+        "instance_id": INSTANCE_ID,
+        "uptime_seconds": uptime,
+        "buffer_usage": f"{buffer_capacity*100:.1f}%",
+        "timestamp": datetime.utcnow().isoformat()
+    }
+
+@app.post("/execute")
+async def execute_action(action: Dict[str, Any]):
+    """Execute service action"""
+    cmd = action.get("action", "")
+    
+    if cmd == "clear":
+        telemetry_buffer.clear()
+        return {"status": "buffer_cleared"}
+    elif cmd == "export":
+        return {
+            "status": "exported",
+            "entries": list(telemetry_buffer),
+            "count": len(telemetry_buffer)
+        }
+    else:
+        raise HTTPException(status_code=400, detail="Unknown action")
+
+@app.post("/receive")
+async def receive_packet(packet: Dict[str, Any]):
+    """Receive inter-service communication"""
+    logger.info(f"[RECEIVE] Packet from {packet.get('source')}: {packet.get('packet_type')}")
+    return {"status": "received", "correlation_id": packet.get("correlation_id")}
+
+if __name__ == "__main__":
+    import uvicorn
+    print("\n╔═════════════════════════════════════════╗")
+    print("║  ALBA COLLECTOR (Port 5555)            ║")
+    print("║  Network Telemetry Service             ║")
+    print("╚═════════════════════════════════════════╝\n")
+    uvicorn.run(app, host="0.0.0.0", port=5555, log_level="info")

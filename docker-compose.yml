@@ -1,6 +1,10 @@
 ﻿version: "3.9"
 
 services:
+  # ═══════════════════════════════════════════════════════════════════
+  # CORE APPLICATION SERVICES
+  # ═══════════════════════════════════════════════════════════════════
+
   frontend:
     build:
       context: ./apps/web
@@ -10,8 +14,15 @@ services:
     environment:
       NODE_ENV: production
       NEXT_PUBLIC_API_BASE: http://api:8000
+      NEXT_PUBLIC_ORCHESTRATOR_URL: http://orchestrator:9999
+      NEXT_PUBLIC_ALBA_URL: http://alba:5555
+      NEXT_PUBLIC_ALBI_URL: http://albi:6666
+      NEXT_PUBLIC_JONA_URL: http://jona:7777
     depends_on:
-      - api
+      api:
+        condition: service_healthy
+      orchestrator:
+        condition: service_healthy
     networks:
       - clisonix
     healthcheck:
@@ -31,9 +42,19 @@ services:
       DEBUG: "false"
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/clisonix
       REDIS_URL: redis://redis:6379/0
+      ALBA_COLLECTOR_URL: http://alba:5555
+      MESH_HQ_URL: http://orchestrator:9999
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      alba:
+        condition: service_healthy
+      albi:
+        condition: service_healthy
+      jona:
+        condition: service_healthy
     networks:
       - clisonix
     healthcheck:
@@ -43,6 +64,95 @@ services:
       retries: 3
     volumes:
       - ./storage:/app/storage
+
+  # ═══════════════════════════════════════════════════════════════════
+  # SAAS SERVICES TIER (5555-7777)
+  # ═══════════════════════════════════════════════════════════════════
+
+  orchestrator:
+    build:
+      context: .
+      dockerfile: Dockerfile.orchestrator
+    ports:
+      - "9999:9999"
+    environment:
+      ORCHESTRATOR_PORT: 9999
+      LOG_LEVEL: INFO
+    networks:
+      - clisonix
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9999/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    depends_on:
+      - alba
+      - albi
+      - jona
+
+  alba:
+    build:
+      context: .
+      dockerfile: Dockerfile.alba
+    ports:
+      - "5555:5555"
+    environment:
+      SERVICE_PORT: 5555
+      SERVICE_NAME: alba
+      LOG_LEVEL: INFO
+    networks:
+      - clisonix
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5555/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    volumes:
+      - alba_data:/app/data
+
+  albi:
+    build:
+      context: .
+      dockerfile: Dockerfile.albi
+    ports:
+      - "6666:6666"
+    environment:
+      SERVICE_PORT: 6666
+      SERVICE_NAME: albi
+      LOG_LEVEL: INFO
+    networks:
+      - clisonix
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6666/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    volumes:
+      - albi_data:/app/data
+
+  jona:
+    build:
+      context: .
+      dockerfile: Dockerfile.jona
+    ports:
+      - "7777:7777"
+    environment:
+      SERVICE_PORT: 7777
+      SERVICE_NAME: jona
+      LOG_LEVEL: INFO
+    networks:
+      - clisonix
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7777/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    volumes:
+      - jona_data:/app/data
+
+  # ═══════════════════════════════════════════════════════════════════
+  # DATABASE & CACHE TIER
+  # ═══════════════════════════════════════════════════════════════════
 
   postgres:
     image: postgres:16-alpine
@@ -75,6 +185,11 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    command: redis-server --appendonly yes
+
+  # ═══════════════════════════════════════════════════════════════════
+  # STORAGE & MONITORING
+  # ═══════════════════════════════════════════════════════════════════
 
   minio:
     image: minio/minio:latest
@@ -86,11 +201,48 @@ services:
       MINIO_ROOT_PASSWORD: minioadmin
     volumes:
       - minio_data:/minio_data
-    command: server /minio_data --console-address ":9001"
     networks:
       - clisonix
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    command: server /minio_data --console-address ":9001"
+
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    networks:
+      - clisonix
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3001:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    networks:
+      - clisonix
+    depends_on:
+      - prometheus
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -103,3 +255,8 @@ volumes:
   postgres_data:
   redis_data:
   minio_data:
+  alba_data:
+  albi_data:
+  jona_data:
+  prometheus_data:
+  grafana_data:
