@@ -148,6 +148,36 @@ async def get_metrics():
             "types": metrics_snapshot["types"]
         }
 
+@app.post("/api/telemetry/ingest")
+async def ingest_agent_telemetry(data: Dict[str, Any]):
+    """Ingest telemetry from AI agents (AGIEM, ASI, Blerina)"""
+    with tracer.start_as_current_span("ingest_agent_telemetry") as span:
+        agent_name = data.get("source", "unknown_agent")
+        agent_data = data.get("data", {})
+        
+        span.set_attribute("agent_name", agent_name)
+        span.set_attribute("operation", agent_data.get("operation", "unknown"))
+        
+        # Store in telemetry buffer
+        entry = TelemetryEntry(
+            source=agent_name,
+            type="agent_telemetry",
+            payload=agent_data,  # Changed from 'data' to 'payload'
+            metadata={"agent": True, "operation": agent_data.get("operation")}
+        )
+        
+        telemetry_buffer.append(entry.dict())
+        metrics_snapshot["total_entries"] += 1
+        metrics_snapshot["sources"][agent_name] = metrics_snapshot["sources"].get(agent_name, 0) + 1
+        
+        logger.info(f"[AGENT] {agent_name}.{agent_data.get('operation')} -> Alba")
+        
+        return {
+            "status": "ingested",
+            "agent": agent_name,
+            "timestamp": entry.timestamp
+        }
+
 @app.get("/health")
 async def health():
     """Service health check"""
@@ -197,15 +227,6 @@ async def receive_packet(packet: Dict[str, Any]):
         
         logger.info(f"[RECEIVE] Packet from {source}: {packet_type}")
         return {"status": "received", "correlation_id": packet.get("correlation_id")}
-
-if __name__ == "__main__":
-    import uvicorn
-    print("\n╔═════════════════════════════════════════╗")
-    print("║  ALBA COLLECTOR (Port 5555)            ║")
-    print("║  Network Telemetry Service             ║")
-    print("║  📊 With OpenTelemetry Tracing         ║")
-    print("╚═════════════════════════════════════════╝\n")
-    uvicorn.run(app, host="0.0.0.0", port=5555, log_level="info")
 
 # ═══════════════════════════════════════════════════════════════════
 # DATA STRUCTURES
@@ -332,9 +353,11 @@ async def receive_packet(packet: Dict[str, Any]):
     return {"status": "received", "correlation_id": packet.get("correlation_id")}
 
 if __name__ == "__main__":
+    import os
     import uvicorn
+    port = int(os.getenv("PORT", "5050"))
     print("\n╔═════════════════════════════════════════╗")
-    print("║  ALBA COLLECTOR (Port 5555)            ║")
+    print(f"║  ALBA COLLECTOR (Port {port})             ║")
     print("║  Network Telemetry Service             ║")
     print("╚═════════════════════════════════════════╝\n")
-    uvicorn.run(app, host="0.0.0.0", port=5555, log_level="info")
+    uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")

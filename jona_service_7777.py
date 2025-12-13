@@ -197,6 +197,38 @@ async def get_synthesis_queue():
         "timestamp": datetime.utcnow().isoformat()
     }
 
+@app.post("/api/coordination/event")
+async def coordination_event(data: Dict[str, Any]):
+    """Receive coordination events from AI agents"""
+    with tracer.start_as_current_span("coordination_event") as span:
+        agent = data.get("agent", "unknown")
+        operation = data.get("operation", "unknown")
+        status = data.get("status", "unknown")
+        
+        span.set_attribute("agent", agent)
+        span.set_attribute("operation", operation)
+        span.set_attribute("status", status)
+        
+        # Log coordination event
+        event_record = {
+            "agent": agent,
+            "operation": operation,
+            "status": status,
+            "success": data.get("success", True),
+            "error": data.get("error"),
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+        
+        coordination_log.append(event_record)
+        
+        logger.info(f"[AGENT] {agent}.{operation} -> Jona ({status})")
+        
+        return {
+            "status": "logged",
+            "agent": agent,
+            "timestamp": event_record["timestamp"]
+        }
+
 @app.get("/metrics")
 async def get_metrics():
     """Get coordinator metrics"""
@@ -264,10 +296,12 @@ async def receive_packet(packet: Dict[str, Any]):
         return {"status": "received", "correlation_id": packet.get("correlation_id")}
 
 if __name__ == "__main__":
+    import os
     import uvicorn
+    port = int(os.getenv("PORT", "7070"))
     print("\n╔═════════════════════════════════════════╗")
-    print("║  JONA COORDINATOR (Port 7777)          ║")
+    print(f"║  JONA COORDINATOR (Port {port})          ║")
     print("║  Data Synthesis Service                ║")
     print("║  📊 With OpenTelemetry Tracing         ║")
     print("╚═════════════════════════════════════════╝\n")
-    uvicorn.run(app, host="0.0.0.0", port=7777, log_level="info")
+    uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")

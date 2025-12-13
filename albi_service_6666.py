@@ -154,6 +154,46 @@ async def get_anomalies(limit: int = 20):
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
 
+@app.post("/api/analytics/agent")
+async def agent_analytics(data: Dict[str, Any]):
+    """Process analytics from AI agents"""
+    with tracer.start_as_current_span("agent_analytics") as span:
+        agent = data.get("agent", "unknown")
+        operation = data.get("operation", "unknown")
+        duration_ms = data.get("duration_ms", 0)
+        tokens = data.get("tokens", {})
+        
+        span.set_attribute("agent", agent)
+        span.set_attribute("operation", operation)
+        span.set_attribute("duration_ms", duration_ms)
+        
+        # Store analytics
+        analytics_entry = {
+            "agent": agent,
+            "operation": operation,
+            "duration_ms": duration_ms,
+            "input_tokens": tokens.get("input"),
+            "output_tokens": tokens.get("output"),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "success": data.get("success", True)
+        }
+        
+        insights.append(analytics_entry)
+        
+        logger.info(f"[AGENT] {agent}.{operation} -> Albi (duration: {duration_ms:.2f}ms)")
+        
+        return {
+            "status": "analyzed",
+            "agent": agent,
+            "timestamp": analytics_entry["timestamp"]
+        }
+        
+        return {
+            "count": len(recent),
+            "anomalies": recent,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+
 @app.get("/metrics")
 async def get_metrics():
     """Get processor metrics"""
@@ -220,10 +260,12 @@ async def receive_packet(packet: Dict[str, Any]):
         return {"status": "received", "correlation_id": packet.get("correlation_id")}
 
 if __name__ == "__main__":
+    import os
     import uvicorn
+    port = int(os.getenv("PORT", "6060"))
     print("\n╔═════════════════════════════════════════╗")
-    print("║  ALBI PROCESSOR (Port 6666)            ║")
+    print(f"║  ALBI PROCESSOR (Port {port})            ║")
     print("║  Neural Analytics Service              ║")
     print("║  📊 With OpenTelemetry Tracing         ║")
     print("╚═════════════════════════════════════════╝\n")
-    uvicorn.run(app, host="0.0.0.0", port=6666, log_level="info")
+    uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")
