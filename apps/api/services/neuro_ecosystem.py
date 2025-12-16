@@ -361,3 +361,5 @@ async def quick_ecosystem_demo() -> Dict[str, Any]:
 if __name__ == "__main__":
     # Testo ekosistemi
     asyncio.run(quick_ecosystem_demo())
+
+

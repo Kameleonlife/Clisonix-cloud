@@ -15,3 +15,4 @@ def record_usage(x_api_key: str = Header(...)):
 @router.get("/stats")
 def usage_stats():
     return {"usage_records": len(USAGE_LOG), "details": USAGE_LOG}
+

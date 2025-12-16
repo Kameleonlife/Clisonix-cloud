@@ -298,3 +298,4 @@ spec:
   selector:
     app: redis
     tier: cache
+

@@ -31,3 +31,4 @@ def main_loop():
 if __name__ == "__main__":
     print("[Scheduler] Daily email at 08:00 Europe/Berlin. Running…")
     main_loop()
+

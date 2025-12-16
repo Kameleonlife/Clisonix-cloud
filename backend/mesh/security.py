@@ -36,3 +36,4 @@ class DDoSGuardMiddleware:
 def verify_request_hmac(request: Request, key: str) -> bool:
     # placeholder: real implementation would verify signature header
     return True
+

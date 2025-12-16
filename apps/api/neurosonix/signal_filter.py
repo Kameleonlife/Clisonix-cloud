@@ -159,3 +159,5 @@ class SignalFilter:
             "power_line_notch": "50 Hz",
             "outlier_threshold": "3 std deviations"
         }
+
+

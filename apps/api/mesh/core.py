@@ -235,3 +235,5 @@ class MeshCore:
         if not required:
             return True  # nëse s’është vendosur, mos e blloko
         return key == required
+
+

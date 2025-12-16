@@ -33,3 +33,4 @@ class CognitiveArchitecture:
     async def get_uptime_seconds(self) -> float:
         """Return the analyzer uptime in seconds."""
         return (datetime.utcnow() - self.analyzer.start_time).total_seconds()
+

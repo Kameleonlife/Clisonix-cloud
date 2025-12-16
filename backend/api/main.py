@@ -34,3 +34,4 @@ def asi_status():
         "albi": {"consciousness": 0.95},
         "jona": {"protection": 0.98}
     }
+

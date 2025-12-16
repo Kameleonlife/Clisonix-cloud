@@ -21,3 +21,4 @@ Write-Host "ðŸ”„ Starting Docker services..."
 docker compose up -d
 
 Write-Host "✅ Setup complete! Clisonix Cloud is ready to use."
+

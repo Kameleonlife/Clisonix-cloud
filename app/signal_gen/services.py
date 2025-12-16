@@ -19,3 +19,4 @@ def get_signal_gen_status():
         "status": "active",
         "timestamp": time.time()
     }
+

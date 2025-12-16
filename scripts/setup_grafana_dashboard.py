@@ -143,3 +143,4 @@ if __name__ == "__main__":
     else:
         print("\n⚠️  Could not verify Prometheus - setup may be incomplete")
         sys.exit(1)
+

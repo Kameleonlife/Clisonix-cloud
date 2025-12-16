@@ -33,3 +33,4 @@ async def system_status():
 @router.get("/ping")
 async def ping():
     return {"message": "clisonix active", "time": datetime.utcnow().isoformat()}
+

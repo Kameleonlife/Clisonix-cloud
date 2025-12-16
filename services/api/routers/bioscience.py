@@ -30,3 +30,4 @@ async def get_gene(symbol: str, user=Depends(oidc_guard)):
         raise HTTPException(status_code=404, detail="Gene not found")
 
     return data[0]
+

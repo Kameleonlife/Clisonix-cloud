@@ -20,3 +20,4 @@ def test_endpoint():
 if __name__ == "__main__":
     logger.info("Starting server...")
     uvicorn.run(app, host="127.0.0.1", port=8001, reload=False, access_log=True)
+

@@ -27,3 +27,4 @@ async def oidc_guard(token: HTTPAuthorizationCredentials = Depends(security)):
         return claims
     except Exception as exc:
         raise HTTPException(status_code=401, detail=f"unauthorized: {exc}") from exc
+

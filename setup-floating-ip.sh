@@ -320,3 +320,4 @@ echo "   Full guide: /opt/clisonix/FLOATING_IP_GUIDE.md"
 echo "   Hetzner docs: https://docs.hetzner.com/cloud/floating-ips/"
 echo ""
 echo "═══════════════════════════════════════════════════════════════"
+

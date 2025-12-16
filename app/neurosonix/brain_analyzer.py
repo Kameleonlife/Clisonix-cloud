@@ -64,3 +64,4 @@ if __name__ == "__main__":
     result = analyzer.compute_cognitive_health()
     print("ðŸ§  Cognitive Health Snapshot:")
     print(result)
+

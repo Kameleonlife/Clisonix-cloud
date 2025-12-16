@@ -372,3 +372,5 @@ def get_multilingual_module() -> MultilingualModule:
     if _multilingual_instance is None:
         _multilingual_instance = MultilingualModule()
     return _multilingual_instance
+
+

@@ -250,3 +250,4 @@ if __name__ == "__main__":
     print("Cleaned Signal:", remove_artifacts(example_signal))
     print("Statistics:", calculate_statistics(example_signal))
     print("SHA-256 Hash:", generate_hash(example_signal))
+

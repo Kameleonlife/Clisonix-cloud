@@ -111,3 +111,4 @@ Write-Host "✅ All secrets configured successfully!`n" -ForegroundColor Green
 Write-Host "Next steps:" -ForegroundColor Cyan
 Write-Host "  1. Verify secrets/ directory is in .gitignore" -ForegroundColor Yellow
 Write-Host "  2. Run: docker-compose -f docker-compose.secrets.yml up -d`n" -ForegroundColor Yellow
+

@@ -37,3 +37,4 @@ compactor:
   retention_enabled: true
   retention_delete_delay: 2h
   shared_store: filesystem
+

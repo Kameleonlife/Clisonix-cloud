@@ -40,3 +40,4 @@ def send_daily_report():
         server.login(user, pwd)
         server.send_message(msg)
     return pdf_path
+

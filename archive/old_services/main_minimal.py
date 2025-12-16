@@ -117,3 +117,4 @@ async def billing_create_subscription(customer_id: str, price_id: str):
 async def billing_usage(customer_id: str):
     usage = get_customer_usage(customer_id)
     return usage
+

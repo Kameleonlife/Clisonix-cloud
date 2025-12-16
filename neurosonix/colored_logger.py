@@ -73,3 +73,4 @@ if __name__ == "__main__":
     demo_logger.warning("Memory usage nearing threshold (yellow)")
     demo_logger.error("Connection to database failed (red)")
     demo_logger.critical("CRITICAL SYSTEM FAILURE (bright red)")
+

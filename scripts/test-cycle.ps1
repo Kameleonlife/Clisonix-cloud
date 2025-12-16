@@ -199,3 +199,4 @@ Write-Host "`n========================================`n" -ForegroundColor Magen
 
 # Exit with appropriate code
 exit $(if ($failCount -eq 0) { 0 } else { 1 })
+

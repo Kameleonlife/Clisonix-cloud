@@ -603,3 +603,4 @@ switch ($Mode) {
 Show-Dashboard
 
 Write-Host "🚀 Clisonix Cloud is ready for takeoff!`n" -ForegroundColor $Colors.Success
+

@@ -16,3 +16,4 @@ def test_asi_system_start_stop():
     assert sys.health_check()["uptime_seconds"] >= h["uptime_seconds"]
     sys.stop()
     assert sys.health_check()["status"] == "stopped"
+

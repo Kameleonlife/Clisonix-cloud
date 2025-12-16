@@ -349,3 +349,4 @@ volumes:
   victoria-metrics-data:
   grafana-data:
   elasticsearch-data:
+

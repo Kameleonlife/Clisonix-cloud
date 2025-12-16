@@ -49,3 +49,4 @@ datasources:
     secureJsonData:
       basicAuthPassword: "clisonix123"
     editable: true
+

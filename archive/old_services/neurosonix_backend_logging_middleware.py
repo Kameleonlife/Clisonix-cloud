@@ -49,3 +49,4 @@ class ColoredLoggingMiddleware(BaseHTTPMiddleware):
 
 
 __all__ = ["ColoredLoggingMiddleware"]
+

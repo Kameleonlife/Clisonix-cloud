@@ -120,3 +120,4 @@ class LocalizationManager:
 
 
 DEFAULT_LOCALIZATION = LocalizationManager()
+

@@ -23,3 +23,4 @@ def get_industrial_data():
         "processes": len(psutil.pids()),
         "hostname": psutil.users()[0].name if psutil.users() else "unknown"
     }
+

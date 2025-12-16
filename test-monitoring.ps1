@@ -212,3 +212,4 @@ Write-Host "   Grafana: http://localhost:3001" -ForegroundColor Cyan
 Write-Host "   VictoriaMetrics: http://localhost:8428" -ForegroundColor Cyan
 
 Write-Host "`n" -ForegroundColor Cyan
+

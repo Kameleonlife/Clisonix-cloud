@@ -22,3 +22,4 @@ def test_error_handling():
     # Endpoint që nuk ekziston
     response = client.get("/notfound")
     assert response.status_code == 404
+

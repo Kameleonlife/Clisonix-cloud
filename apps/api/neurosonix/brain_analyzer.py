@@ -228,3 +228,5 @@ class BrainWaveAnalyzer:
             return "fair"
         else:
             return "poor"
+
+

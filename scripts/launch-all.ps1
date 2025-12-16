@@ -319,3 +319,4 @@ if (!$DryRun) {
 Write-Host ""
 Write-Host "Press Ctrl+C to stop services" -ForegroundColor Yellow
 Write-Host ""
+

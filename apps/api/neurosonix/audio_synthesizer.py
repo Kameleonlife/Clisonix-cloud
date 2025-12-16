@@ -419,3 +419,5 @@ class AudioSynthesizer:
             "frequency_mappings": self.brainwave_mapping,
             "timestamp": datetime.now().isoformat()
         }
+
+

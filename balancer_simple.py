@@ -175,3 +175,4 @@ if __name__ == "__main__":
         STOP_EVENT.set()
         for t in threads:
             t.join(timeout=2)
+

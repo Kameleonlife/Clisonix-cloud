@@ -239,3 +239,4 @@ if ($recommendations.Count -eq 0) {
 Write-Host "═══════════════════════════════════════════════════════════════`n" -ForegroundColor Cyan
 
 return $percentage
+

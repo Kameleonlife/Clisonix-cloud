@@ -408,3 +408,4 @@ spec:
       name: jaeger-ui
   selector:
     app: jaeger
+

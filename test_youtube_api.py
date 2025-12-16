@@ -34,3 +34,4 @@ except Exception as e:
     print("1. API key is correct")
     print("2. YouTube Data API v3 is enabled")
     print("3. Quota not exceeded (10k requests/day)")
+

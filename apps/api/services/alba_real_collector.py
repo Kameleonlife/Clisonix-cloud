@@ -215,3 +215,5 @@ async def create_alba_real() -> ALBA_RealCollector:
     """Krijon njÃ« instance ALBA qÃ« mbledh tÃ« dhÃ«na reale"""
     alba = ALBA_RealCollector()
     return alba
+
+

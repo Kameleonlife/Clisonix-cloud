@@ -62,3 +62,5 @@ async def get_external_status():
     except Exception as e:
         logger.error(f"External API error: {e}")
         raise HTTPException(status_code=502, detail="External API unavailable")
+
+

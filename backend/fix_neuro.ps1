@@ -43,3 +43,4 @@ Write-Host "Restoring npm workspaces" -ForegroundColor Cyan
 npm install | Out-Null
 
 Write-Host "Fix script complete. Run 'npm run dev' or 'scripts\start-all.ps1' to relaunch." -ForegroundColor Green
+

@@ -22,3 +22,4 @@ def register_routes(app: FastAPI) -> None:
     app.include_router(status_router)
     if ingest_router is not None:
         app.include_router(ingest_router)
+

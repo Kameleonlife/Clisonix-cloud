@@ -541,3 +541,5 @@ def _get_mock_metrics(hours: int = 24) -> List[MetricsSnapshot]:
         ))
         
     return sorted(snapshots, key=lambda s: s.timestamp)
+
+

@@ -1260,3 +1260,5 @@ class IndustrialEEGProcessor:
 
 # Create backward compatibility alias
 EEGProcessor = IndustrialEEGProcessor
+
+

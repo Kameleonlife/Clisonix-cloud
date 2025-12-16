@@ -11,3 +11,5 @@ def add_favicon_route(app: FastAPI):
     @app.get("/favicon.ico", include_in_schema=False)
     def favicon():
         return FileResponse(favicon_path, media_type="image/x-icon")
+
+

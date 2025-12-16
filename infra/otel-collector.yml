@@ -16,3 +16,4 @@ service:
       receivers: [otlp]
       processors: [batch]
       exporters: [logging]
+

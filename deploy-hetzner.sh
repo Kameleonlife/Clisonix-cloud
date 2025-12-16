@@ -492,3 +492,4 @@ echo "📁 Project directory: $PROJECT_DIR"
 echo "🔐 Credentials file: $PROJECT_DIR/.credentials.txt (chmod 600)"
 echo ""
 echo "════════════════════════════════════════════════════════════"
+

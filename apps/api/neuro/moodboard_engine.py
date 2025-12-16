@@ -107,3 +107,5 @@ class MoodboardEngine:
             "neutral": "Balance is the music of clarity."
         }
         return Q.get(mood, "Find your frequency.")
+
+

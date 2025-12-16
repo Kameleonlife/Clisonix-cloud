@@ -87,3 +87,4 @@ fi
 
 echo -e "${GREEN}✅ Pre-commit security check passed${NC}"
 exit 0
+

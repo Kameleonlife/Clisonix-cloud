@@ -26,3 +26,4 @@ async def stripe_webhook(request: Request):
     if event["type"] == "checkout.session.completed":
         print("âœ… Payment completed:", event["data"]["object"]["customer_email"])
     return {"received": True}
+

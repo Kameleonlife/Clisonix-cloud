@@ -269,3 +269,4 @@ groups:
         annotations:
           summary: "Service {{ $labels.job }} restarted multiple times"
           description: "Service has restarted {{ $value }} times in last 15 minutes"
+

@@ -15,3 +15,4 @@ curl -s \
   -d username="${USER}" \
   -d password="${PASS}" \
   "${KC}/realms/${REALM}/protocol/openid-connect/token" | jq -r '.access_token'
+

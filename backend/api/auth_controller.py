@@ -25,3 +25,4 @@ def login_user(payload: RegisterRequest):
     if not user or user["password"] != hashlib.sha256(payload.password.encode()).hexdigest():
         raise HTTPException(status_code=401, detail="Invalid credentials")
     return {"api_key": user["api_key"]}
+

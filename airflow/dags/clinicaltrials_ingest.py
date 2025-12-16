@@ -83,3 +83,4 @@ with DAG(
     catchup=False,
 ) as dag:
     PythonOperator(task_id="load_trials", python_callable=load_trials)
+

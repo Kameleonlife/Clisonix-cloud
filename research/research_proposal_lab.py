@@ -116,3 +116,4 @@ class ResearchProposalLab:
         }
         packet_path.write_text(json.dumps(packet_payload, indent=2), encoding="utf-8")
         return ProposalPacket(brief=brief, packet_path=packet_path, attachments=attachments or {})
+

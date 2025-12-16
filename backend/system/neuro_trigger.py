@@ -117,3 +117,4 @@ class NeuroTrigger:
 if __name__ == "__main__":
     t = NeuroTrigger()
     t.detect_event("error", "Telemetry module crashed", {"module": "telemetry_service"})
+

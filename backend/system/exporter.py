@@ -70,3 +70,4 @@ def generate_pdf_report():
 
     c.save()
     return report_path
+

@@ -83,3 +83,4 @@ echo "📝 Next steps:"
 echo "   1. Review generated passwords above"
 echo "   2. Update API keys in secrets/ directory"
 echo "   3. Run: docker stack deploy -c docker-compose.secrets.yml clisonix"
+

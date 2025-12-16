@@ -95,3 +95,4 @@ async def get_uptime():
         return {"uptime_seconds": uptime_seconds}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+

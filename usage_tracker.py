@@ -44,3 +44,4 @@ def get_usage(api_key: str):
         return int(val or 0)
     data = load_usage()
     return data.get(api_key, {}).get(today, 0)
+

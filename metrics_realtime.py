@@ -252,3 +252,4 @@ if __name__ == "__main__":
     health = real_metrics['health_score']
     status = "âœ… OPTIMAL" if health > 90 else "âš ï¸ ATTENTION" if health > 70 else "ðŸš¨ CRITICAL"
     print(f"\nðŸ¥ SYSTEM HEALTH: {health}% - {status}")
+

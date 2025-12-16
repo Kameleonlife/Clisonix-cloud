@@ -68,3 +68,4 @@ class AutoMonitor:
             time.sleep(2)
 
         return out
+

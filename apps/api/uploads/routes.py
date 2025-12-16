@@ -603,3 +603,5 @@ async def process_audio_file_background(file_id: str, metadata: Dict[str, Any]):
     except Exception as e:
         logger.error(f"Background audio processing failed: {e}",
                     extra={'correlation_id': process_id})
+
+

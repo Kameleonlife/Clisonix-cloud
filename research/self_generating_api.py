@@ -276,3 +276,4 @@ class SelfGeneratingAPI:
 
         router_block = "\n".join(lines)
         return imports_block + "\n\n\n" + router_block + "\n"
+

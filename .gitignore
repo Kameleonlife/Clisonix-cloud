@@ -3,9 +3,16 @@
 
 # Environment Variables (SENSITIVE DATA)
 .env
+.env.*
 .env.local
 .env.production
 .env.staging
+.env.development
+.secrets
+.secrets.*
+secrets/
+*.secret
+*_secret.txt
 
 # Database
 *.db

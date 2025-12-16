@@ -16,3 +16,4 @@ docker compose up -d
 # You can add health check logic here if needed
 
 Write-Host "âœ… Deployment complete!"
+

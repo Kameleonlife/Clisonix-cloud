@@ -214,3 +214,5 @@ def get_audio_spectrometer_error() -> SimpleAlert:
         active=True,
         message="Audio Spectrometer connection failed. Check network configuration.",
     )
+
+

@@ -355,3 +355,5 @@ class FitnessStats(Base):
     
     def __repr__(self):
         return f"<FitnessStats(user_id={self.user_id}, total_workouts={self.total_workouts})>"
+
+

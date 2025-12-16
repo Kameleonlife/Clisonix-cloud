@@ -491,3 +491,5 @@ class CoachingEngine:
             ),
             "total_attempts": sum(issues_data.values())
         }
+
+

@@ -46,3 +46,4 @@ async def concept(term: str, user=Depends(oidc_guard)) -> List[Dict[str, Any]]:
                 }
             )
         return payload
+

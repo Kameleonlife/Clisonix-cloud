@@ -390,3 +390,4 @@ if __name__ == "__main__":
     # Print usage stats
     stats = service.get_translation_usage_stats()
     print(f"Service stats: {stats}")
+

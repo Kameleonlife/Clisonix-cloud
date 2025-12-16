@@ -66,3 +66,4 @@ async def list_drug_labels(limit: int = 50, user=Depends(oidc_guard)):
         "SELECT id, brand_name, generic_name, route FROM drug_labels ORDER BY id DESC LIMIT %s",
         [limit],
     )
+

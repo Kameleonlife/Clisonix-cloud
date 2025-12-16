@@ -600,3 +600,5 @@ async def fitness_module_health():
         "version": "1.0.0",
         "timestamp": datetime.now(timezone.utc).isoformat()
     }
+
+

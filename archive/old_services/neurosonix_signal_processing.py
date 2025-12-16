@@ -475,3 +475,4 @@ if __name__ == "__main__":
     print(f"ðŸŽ¯ Detected {len(first_channel.artifacts_detected)} artifacts")
     print(f"ðŸ“ˆ Extracted {len(first_channel.feature_vectors)} feature types")
     print(f"ðŸŒŠ Frequency bands analyzed: {list(first_channel.frequency_bands.keys())}")
+

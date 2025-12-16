@@ -106,3 +106,4 @@ Write-Host "📝 Next steps:" -ForegroundColor Cyan
 Write-Host "   1. Review generated passwords above" -ForegroundColor White
 Write-Host "   2. Update API keys in secrets/ directory" -ForegroundColor White
 Write-Host "   3. Run: docker stack deploy -c docker-compose.secrets.yml clisonix" -ForegroundColor White
+

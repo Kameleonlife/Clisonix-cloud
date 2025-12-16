@@ -516,3 +516,4 @@ if __name__ == "__main__":
         print("Usage:")
         print("  python agent_telemetry.py --test")
         print("  python agent_telemetry.py --monitor [--interval 15] [--max-iterations 10]")
+

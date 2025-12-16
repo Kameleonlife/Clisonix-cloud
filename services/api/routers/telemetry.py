@@ -26,3 +26,4 @@ async def series(signal: str, start: str = "-1h", stop: str = "now()", user=Depe
         for record in table.records:
             points.append({"ts": record.get_time().isoformat(), "value": record.get_value()})
     return {"signal": signal, "points": points}
+

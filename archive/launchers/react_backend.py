@@ -147,3 +147,4 @@ def react_status():
 @app.get("/")
 def root():
     return Response("Ultra-Industrial React Backend API is running.", media_type="text/plain")
+

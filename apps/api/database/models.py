@@ -401,3 +401,5 @@ def get_recent_payments(session: Session, user_id: str = None, days: int = 30):
     if user_id:
         query = query.filter(Payment.user_id == user_id)
     return query.order_by(Payment.created_at.desc()).all()
+
+

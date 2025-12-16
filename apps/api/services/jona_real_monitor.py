@@ -340,3 +340,5 @@ async def create_jona_real() -> JONA_RealMonitor:
     """Krijon njÃ« instance JONA qÃ« monitorizon sistemin real"""
     jona = JONA_RealMonitor()
     return jona
+
+

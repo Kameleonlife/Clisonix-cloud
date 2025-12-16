@@ -18,3 +18,4 @@ async def search(q: str = Query(..., min_length=2), user=Depends(oidc_guard)):
         return {"results": response}
     finally:
         client.close()
+

@@ -66,3 +66,4 @@ with DAG(
     upsert_task = PythonOperator(task_id="upsert_weaviate", python_callable=upsert_weaviate)
 
     fetch_task >> upsert_task
+

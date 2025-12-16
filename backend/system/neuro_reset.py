@@ -195,3 +195,4 @@ def neuro_stop(payload: Dict[str, Any] = Body(...)):
 @router.get("/reset/last")
 def neuro_last(n: int = 5):
     return nr.last(n)
+

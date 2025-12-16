@@ -20,3 +20,5 @@ async def _get_json(client: httpx.AsyncClient, url: str, params: Dict[str, Any])
     response = await client.get(url, params=params)
     response.raise_for_status()
     return response.json()
+
+

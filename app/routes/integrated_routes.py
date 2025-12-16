@@ -23,3 +23,4 @@ def health():
 @router.get("/info")
 def info(service: str = Depends(get_service_name)):
 	return {"service": service, "description": "Minimal integrated routes"}
+

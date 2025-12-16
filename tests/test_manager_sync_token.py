@@ -63,3 +63,4 @@ def test_manager_sync_persists_catalog():
 if __name__ == '__main__':
     # allow running this file directly for a quick smoke-test
     test_manager_sync_persists_catalog()
+

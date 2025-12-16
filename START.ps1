@@ -285,3 +285,4 @@ Write-Host "Monitoring services..." -ForegroundColor Gray
 while ($true) {
     Start-Sleep -Seconds 10
 }
+

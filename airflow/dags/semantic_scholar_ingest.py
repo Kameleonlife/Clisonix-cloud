@@ -48,3 +48,4 @@ with DAG(
     catchup=False,
 ) as dag:
     PythonOperator(task_id="load_batch", python_callable=load_batch)
+

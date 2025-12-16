@@ -65,3 +65,4 @@ class SmartScanner:
             if any(sf in files for sf in sigs):
                 return kind
         return None
+

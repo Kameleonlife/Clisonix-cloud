@@ -99,3 +99,4 @@ function Invoke-CFApplyAll {
     New-CFFirewallRuleAdminLock -ZoneId $ZoneId -ApiToken $ApiToken -OfficeIp $OfficeIp -DryRun:$DryRun
     New-CFRateLimitApiAsk -ZoneId $ZoneId -ApiToken $ApiToken -DryRun:$DryRun
 }
+

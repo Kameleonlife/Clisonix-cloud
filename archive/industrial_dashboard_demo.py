@@ -10,3 +10,4 @@ except Exception:
     except Exception:
         # leave router undefined (main will handle import errors)
         router = None
+

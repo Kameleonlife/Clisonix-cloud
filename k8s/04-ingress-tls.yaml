@@ -248,3 +248,4 @@ spec:
       backendRefs:
         - name: clisonix-frontend-service
           port: 3000
+

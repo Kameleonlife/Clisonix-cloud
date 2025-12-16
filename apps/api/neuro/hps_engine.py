@@ -75,3 +75,5 @@ class HPSEngine:
             "neutral": "The Architect",
         }
         return mapping.get(e, "The Signal")
+
+

@@ -496,3 +496,5 @@ if __name__ == "__main__":
     
     print("\n✅ Biometric Tracker demo completed successfully!")
     print("=" * 60)
+
+

@@ -72,3 +72,4 @@ with DAG(
     catchup=False,
 ) as dag:
     PythonOperator(task_id="load_drug_labels", python_callable=load_drug_labels)
+

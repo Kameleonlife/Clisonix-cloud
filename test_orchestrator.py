@@ -168,3 +168,4 @@ response = requests.get(f"{ORCHESTRATOR_URL}/services/alba/health")
 print(f"Alba health via proxy: {response.json()}")
 
 print("\n✅ All tests passed!")
+

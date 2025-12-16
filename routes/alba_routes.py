@@ -301,3 +301,4 @@ async def health_check() -> AlbaHealth:
         timestamp=datetime.now().isoformat(),
         version="1.0.0",
     )
+

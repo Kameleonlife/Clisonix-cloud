@@ -25,3 +25,4 @@ def check_usage(plan_name: str, usage_today: int):
     if usage_today >= limit:
         return {"allowed": False, "limit": limit}
     return {"allowed": True, "remaining": limit - usage_today}
+

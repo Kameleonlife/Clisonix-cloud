@@ -4,3 +4,4 @@ class SandboxCore:
         self.status = "active"
     def log_event(self, event: str):
         print(f"[SANDBOX] Event: {event}")
+

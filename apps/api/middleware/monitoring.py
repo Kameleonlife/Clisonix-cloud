@@ -374,3 +374,5 @@ class MonitoringMiddleware(BaseHTTPMiddleware):
                 "message": f"Health calculation failed: {str(e)}",
                 "timestamp": time.time()
             }
+
+

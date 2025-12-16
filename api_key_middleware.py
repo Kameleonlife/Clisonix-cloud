@@ -23,3 +23,4 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
             raise HTTPException(status_code=403, detail="Invalid API key")
         response = await call_next(request)
         return response
+

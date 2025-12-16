@@ -80,3 +80,4 @@ def dashboard():
             "disk": psutil.disk_usage("/").percent
         }
     }
+

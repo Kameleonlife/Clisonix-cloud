@@ -73,3 +73,4 @@ echo -e "\n✅ All secrets configured successfully!\n"
 echo "Next steps:"
 echo "  1. Verify secrets/ directory is in .gitignore"
 echo "  2. Run: docker-compose -f docker-compose.secrets.yml up -d\n"
+

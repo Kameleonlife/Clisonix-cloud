@@ -80,3 +80,4 @@ alerting:
 
 rule_files:
   - '/etc/prometheus/rules/*.yml'
+

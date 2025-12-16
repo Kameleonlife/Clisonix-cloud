@@ -444,3 +444,5 @@ class StorageError(Exception):
 # Initialize storage system
 storage_config = StorageConfig()
 storage_system = IndustrialStorageSystem(storage_config)
+
+

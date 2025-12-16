@@ -122,3 +122,4 @@ def root() -> dict[str, object]:
 if __name__ == "__main__":
     port = int(os.getenv("ALBA_API_PORT", 9091))
     uvicorn.run("alba_api_server:app", host="127.0.0.1", port=port, reload=False)
+

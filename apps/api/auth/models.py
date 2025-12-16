@@ -242,3 +242,5 @@ class APIKey(Base):
         if not self.expires_at:
             return False
         return datetime.now(timezone.utc) > self.expires_at
+
+

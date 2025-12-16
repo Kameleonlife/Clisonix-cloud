@@ -31,3 +31,5 @@ def get_metrics():
         "load_avg": psutil.getloadavg() if hasattr(psutil, "getloadavg") else None,
         "timestamp": time.time()
     }
+
+

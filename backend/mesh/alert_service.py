@@ -29,3 +29,4 @@ def notify(rec: dict, alerts: list):
         return r.status_code >= 200 and r.status_code < 300
     except Exception:
         return False
+

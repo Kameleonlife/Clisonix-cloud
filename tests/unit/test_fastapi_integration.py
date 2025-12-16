@@ -30,3 +30,4 @@ def test_agi_stats():
     assert "cpu_percent" in data
 
 # Add more endpoint tests as needed
+

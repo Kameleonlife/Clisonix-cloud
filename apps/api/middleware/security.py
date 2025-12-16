@@ -328,3 +328,5 @@ class SecurityMiddleware(BaseHTTPMiddleware):
             "business": "Ledjan Ahmati - WEB8euroweb GmbH",
             "timestamp": time.time()
         }
+
+

@@ -23,3 +23,4 @@ class ToneSynth:
         output /= np.max(np.abs(output)) + 1e-9
 
         return output
+

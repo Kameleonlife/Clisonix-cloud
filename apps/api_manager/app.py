@@ -195,3 +195,4 @@ if __name__ == "__main__":
     os.makedirs(os.path.dirname(LOG_PATH), exist_ok=True)
     log("API_MANAGER_ULTRA 6.0 started", "SYS")
     uvicorn.run(app, host="0.0.0.0", port=8101, log_level="error")
+

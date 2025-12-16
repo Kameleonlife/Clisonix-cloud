@@ -16,3 +16,4 @@ async def generated_status():
     payload["focus_channels"] = ['cpu_percent', 'memory_percent', 'disk_percent', 'temperature_c', 'network_sent_mb', 'network_recv_mb']
     payload["source_tags"] = ['needs-review', 'ok']
     return payload
+

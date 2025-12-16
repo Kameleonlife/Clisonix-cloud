@@ -135,3 +135,4 @@ if __name__ == "__main__":
     logger.info("All cluster services launched successfully.")
     logger.info("Press CTRL+C to stop all.")
     monitor_processes(processes)
+

@@ -14,3 +14,4 @@ async def suggest_concepts(payload: dict = Body(...), user=Depends(oidc_guard)):
         "residual": residual,
         "action": "summarize_and_seed" if gap_detected else "no_action",
     }
+

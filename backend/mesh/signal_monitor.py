@@ -11,3 +11,4 @@ def rtt_http(url: str, timeout: float = 2.0):
     except Exception:
         return None
     return None
+
