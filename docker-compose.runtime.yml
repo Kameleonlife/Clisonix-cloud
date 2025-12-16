@@ -403,7 +403,7 @@ services:
     working_dir: /app
     volumes:
       - ./:/app
-    command: ["sh", "-c", "pip install -q -r requirements.txt && python slack_integration_service.py"]
+    command: ["sh", "-c", "pip install -q -r slack_requirements.txt && python slack_simple.py"]
     environment:
       PYTHONUNBUFFERED: "1"
       SLACK_WEBHOOK_URL: "${SLACK_WEBHOOK_URL}"
@@ -464,5 +464,6 @@ services:
 networks:
   clisonix-network:
     driver: bridge
+
 
 

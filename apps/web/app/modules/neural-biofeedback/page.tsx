@@ -129,7 +129,7 @@ export default function NeuralBiofeedback() {
   const getTabConfig = () => {
     if (!metrics) return null;
     
-    const configs = {
+    const configs: Record<string, { title: string; emoji: string; description: string; color: string; data: TrainingProgress }> = {
       alpha: {
         title: 'Alpha Training',
         emoji: '🌊',
@@ -153,7 +153,7 @@ export default function NeuralBiofeedback() {
       },
     };
 
-    return (configs as any)[activeTab] || configs.alpha;
+    return configs[activeTab] || configs.alpha;
   };
 
   const config = getTabConfig();

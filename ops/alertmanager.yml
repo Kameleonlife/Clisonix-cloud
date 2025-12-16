@@ -1,6 +1,6 @@
 global:
   resolve_timeout: 5m
-  slack_api_url: ${SLACK_WEBHOOK_URL}
+  slack_api_url: 'https://hooks.slack.com/services/PLACEHOLDER'
 
 route:
   receiver: default
@@ -44,4 +44,3 @@ inhibit_rules:
     target_match:
       severity: 'warning'
     equal: ['alertname', 'service']
-

@@ -50,7 +50,7 @@
     "rimraf": "6.0.1",
     "tailwindcss": "3.4.17",
     "typescript": "5.7.2",
-    "vite": "6.0.5"
+    "vite": "^6.4.1"
   },
   "engines": {
     "node": ">=20.0.0",
@@ -58,12 +58,12 @@
   },
   "dependencies": {
     "@aws-sdk/s3-request-presigner": "3.709.0",
-    "axios": "1.7.9",
+    "axios": "^1.13.2",
     "clamscan": "2.4.0",
-    "compression": "1.7.5",
+    "compression": "^1.8.1",
     "cors": "2.8.5",
     "express": "5.0.1",
-    "fastify": "5.2.0",
+    "fastify": "^5.6.2",
     "ffprobe-static": "3.1.0",
     "file-type": "19.6.0",
     "fluent-ffmpeg": "2.1.3",
@@ -76,4 +76,3 @@
     "zod": "3.24.1"
   }
 }
-

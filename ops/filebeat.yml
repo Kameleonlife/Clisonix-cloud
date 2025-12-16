@@ -1,35 +1,15 @@
 filebeat.inputs:
-  - type: docker
+  - type: log
     enabled: true
-    containers.ids:
-      - '*'
-    processors:
-      - add_docker_metadata:
-          host: "unix:///var/run/docker.sock"
-      - add_fields:
-          target: ''
-          fields:
-            environment: production
-            service: clisonix
-
-filebeat.config.modules:
-  path: ${path.config}/modules.d/*.yml
-  reload.enabled: false
+    paths:
+      - /var/lib/docker/containers/*/*-json.log
+    json.message_key: log
+    json.keys_under_root: true
+    json.add_error_key: true
 
 output.elasticsearch:
-  hosts: ["${ELASTICSEARCH_HOSTS:elasticsearch:9200}"]
-  username: "${ELASTICSEARCH_USERNAME}"
-  password: "${ELASTICSEARCH_PASSWORD}"
-  index: "clisonix-logs-%{+yyyy.MM.dd}"
+  hosts: ["elasticsearch:9200"]
+  username: elastic
+  password: clisonix123
 
 logging.level: info
-logging.selectors: ["*"]
-
-# Processors
-processors:
-  - add_host_metadata:
-      when.not.contains.tags: forwarded
-  - add_cloud_metadata: ~
-  - add_docker_metadata: ~
-  - add_kubernetes_metadata: ~
-
