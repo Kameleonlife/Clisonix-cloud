@@ -1,50 +1,21 @@
-﻿# Clisonix Industrial Backend Docker Image
-FROM node:18-alpine AS base
-
-# Set working directory
-WORKDIR /app
-
-# Copy package files
-COPY package*.json ./
-
-# Install dependencies
-RUN npm ci --only=production
-
-# Development stage
-FROM base AS development
-RUN npm ci
-COPY . .
-EXPOSE 8088
-CMD ["npm", "run", "dev"]
-
-# Build stage
-FROM base AS build
-RUN npm ci
-COPY . .
-RUN npm run build
-
-# Production stage
-FROM node:18-alpine AS production
-
-# Create app user
-RUN addgroup -g 1001 -S nodejs
-RUN adduser -S Clisonix -u 1001
+# Clisonix Backend - Python/FastAPI
+FROM python:3.11-slim
 
 WORKDIR /app
 
-# Copy production files
-COPY --from=build --chown=Clisonix:nodejs /app/dist ./dist
-COPY --from=build --chown=Clisonix:nodejs /app/node_modules ./node_modules
-COPY --from=build --chown=Clisonix:nodejs /app/package*.json ./
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
 
-USER Clisonix
+# Copy requirements
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt || pip install --no-cache-dir fastapi uvicorn pydantic pydantic-settings
 
-EXPOSE 8088
+# Copy source code
+COPY . .
 
-ENV NODE_ENV=production
-ENV PORT=8088
+EXPOSE 8000
 
-HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-  CMD curl -f http://localhost:8088/health || exit 1
-
-CMD ["npm", "start"]
+# Run with uvicorn
+CMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

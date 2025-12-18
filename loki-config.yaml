@@ -1,0 +1,28 @@
+# Minimal Loki config for 2.9.5 - ephemeral /tmp storage
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+  grpc_listen_port: 9095
+
+ingester:
+  max_chunk_age: 2h
+  chunk_retain_period: 1m
+  lifecycler:
+    ring:
+      kvstore:
+        store: inmemory
+
+schema_config:
+  configs:
+    - from: 2024-01-01
+      store: boltdb-shipper
+      object_store: filesystem
+      schema: v11
+
+storage_config:
+  filesystem:
+    directory: /tmp/loki
+  boltdb_shipper:
+    active_index_directory: /tmp/loki/index
+    shared_store: filesystem

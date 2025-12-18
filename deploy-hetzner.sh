@@ -224,24 +224,18 @@ services:
   api:
     build:
       context: .
-      dockerfile: Dockerfile
-    container_name: clisonix_api
-    restart: unless-stopped
+      dockerfile: Dockerfile.api
+    container_name: clisonix-api
     ports:
       - "8000:8000"
-    env_file:
-      - .env.production
-    volumes:
-      - ./data:/app/data
-      - ./logs:/app/logs
-    networks:
-      - clisonix_network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+    environment:
+      - ENV=production
+      - DATABASE_URL=postgresql://postgres:password@postgres:5432/postgres
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - postgres
+      - redis
+    restart: unless-stopped
 
   # Frontend Web
   web:

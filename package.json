@@ -10,7 +10,7 @@
   "scripts": {
     "dev": "concurrently \"npm run dev:web\" \"npm run dev:api\"",
     "dev:web": "cd apps/web && npm run dev",
-    "dev:api": "cd apps/api && python -m uvicorn main:app --host 0.0.0.0 --port 8008",
+    "dev:api": "cd apps/api && python -m uvicorn main:app --host 0.0.0.0 --port 8000",
     "dev:signal-gen": "cd packages/signal-gen/backend && npm run dev",
     "dev:demo-api": "C:/Clisonix-cloud/.venv/Scripts/python.exe demo_api_server.py",
     "demo": "concurrently \"npm run dev:signal-gen\" \"npm run dev:demo-api\" \"npm run dev:web\"",
@@ -19,7 +19,7 @@
     "build:api": "cd apps/api && echo 'API build complete'",
     "start": "concurrently \"npm run start:api\" \"npm run start:web\"",
     "start:web": "cd apps/web && npm start",
-    "start:api": "cd apps/api && python -m uvicorn main:app --host 0.0.0.0 --port 8008",
+    "start:api": "cd apps/api && python -m uvicorn main:app --host 0.0.0.0 --port 8000",
     "test": "npm run test:web && npm run test:api",
     "test:web": "cd apps/web && npm test",
     "test:api": "cd apps/api && python -m pytest",
