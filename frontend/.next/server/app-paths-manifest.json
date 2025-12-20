@@ -1,0 +1,15 @@
+{
+  "/_not-found/page": "app/_not-found/page.js",
+  "/api/eeg-analysis-data/route": "app/api/eeg-analysis-data/route.js",
+  "/api/neural-synthesis-data/route": "app/api/neural-synthesis-data/route.js",
+  "/api/neuroacoustic-converter-data/route": "app/api/neuroacoustic-converter-data/route.js",
+  "/api/spectrum-analyzer-data/route": "app/api/spectrum-analyzer-data/route.js",
+  "/api/backend-health/route": "app/api/backend-health/route.js",
+  "/api/signal-gen-status/route": "app/api/signal-gen-status/route.js",
+  "/api/signal-gen-data/route": "app/api/signal-gen-data/route.js",
+  "/modules/page": "app/modules/page.js",
+  "/modules/neuroacoustic-converter/page": "app/modules/neuroacoustic-converter/page.js",
+  "/modules/spectrum-analyzer/page": "app/modules/spectrum-analyzer/page.js",
+  "/modules/eeg-analysis/page": "app/modules/eeg-analysis/page.js",
+  "/modules/neural-synthesis/page": "app/modules/neural-synthesis/page.js"
+}

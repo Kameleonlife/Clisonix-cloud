@@ -1,0 +1,42 @@
+{
+  "name": "clisonix-cloud-frontend",
+  "version": "1.0.0",
+  "description": "Clisonix Cloud - Advanced Neural & Audio Intelligence Platform - Frontend",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "export": "next build && next export",
+    "production": "next build && NODE_ENV=production next start"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "next": "^14.2.0",
+    "typescript": "^5.4.5",
+    "@types/react": "^18.3.2",
+    "@types/react-dom": "^18.3.0",
+    "@types/node": "^20.12.7",
+    "tailwindcss": "^3.4.3",
+    "postcss": "^8.4.37",
+    "autoprefixer": "^10.4.19",
+    "axios": "^1.7.7",
+    "chart.js": "^4.4.2",
+    "react-chartjs-2": "^5.2.0",
+    "date-fns": "^3.6.0",
+    "recharts": "^2.12.7",
+    "classnames": "^2.3.2"
+  },
+  "devDependencies": {
+    "eslint": "^8.57.0",
+    "eslint-config-next": "^14.2.0",
+    "@typescript-eslint/eslint-plugin": "^7.8.0",
+    "@typescript-eslint/parser": "^7.8.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  }
+}
