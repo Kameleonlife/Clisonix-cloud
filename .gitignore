@@ -154,3 +154,5 @@ instance/
 *.tmp
 tmp/
 temp/
+
+Clisonix-cloud/
