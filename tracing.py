@@ -25,11 +25,21 @@ from opentelemetry import trace
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
-from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
-from opentelemetry.instrumentation.requests import RequestsInstrumentor
-from opentelemetry.instrumentation.aiohttp_client import AioHttpClientInstrumentor
-from opentelemetry.instrumentation.logging import LoggingInstrumentor
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import (
+    OTLPSpanExporter,
+)
+from opentelemetry.instrumentation.fastapi import (
+    FastAPIInstrumentor,
+)  # type: ignore
+from opentelemetry.instrumentation.requests import (
+    RequestsInstrumentor,
+)  # type: ignore
+from opentelemetry.instrumentation.aiohttp_client import (
+    AioHttpClientInstrumentor,
+)  # type: ignore
+from opentelemetry.instrumentation.logging import (
+    LoggingInstrumentor,
+)  # type: ignore
 from opentelemetry.trace import Status, StatusCode
 
 
@@ -44,7 +54,8 @@ def setup_tracing(
     Args:
         service_name: Name of the service (alba, albi, jona, api, etc.)
         environment: Deployment environment (production, staging, development)
-        tempo_endpoint: Tempo OTLP HTTP endpoint. Defaults to http://tempo:4318/v1/traces (optional)
+        tempo_endpoint: Tempo OTLP HTTP endpoint.
+            Defaults to http://tempo:4318/v1/traces (optional)
 
     Returns:
         OpenTelemetry Tracer instance for the service
@@ -61,7 +72,7 @@ def setup_tracing(
     # Create Resource with service identification
     resource = Resource.create({
         "service.name": service_name,
-        "service.version": "1.0.0",
+        "service.version": "1.2.3",
         "environment": environment,
         "host.name": os.getenv("HOSTNAME", "unknown"),
     })
@@ -84,7 +95,10 @@ def setup_tracing(
         tracer_provider.add_span_processor(batch_processor)
         print(f"✓ Tracing enabled for {service_name} → {tempo_endpoint}")
     except Exception as e:
-        print(f"⚠️  Tracing disabled for {service_name} (Tempo unavailable: {e})")
+        print(
+            f"⚠️  Tracing disabled for {service_name} "
+            f"(Tempo unavailable: {e})"
+        )
         # Tracing will still work with no-op exporter
 
     # Set global tracer provider
@@ -143,7 +157,9 @@ def create_span_with_error_handling(
     Context manager that creates a span and handles errors.
 
     Usage:
-        with create_span_with_error_handling(tracer, "process_packet", {"packet_size": 256}):
+        with create_span_with_error_handling(
+            tracer, "process_packet", {"packet_size": 256}
+        ):
             # span automatically created and errors tracked
             do_processing()
     """
@@ -180,11 +196,11 @@ def get_trace_context_headers() -> dict:
     Returns:
         Dictionary of headers containing trace context
     """
-    from opentelemetry.propagators.jaeger.jaeger import Jaeger
-    from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+    from opentelemetry.propagators.jaeger.jaeger import (
+        Jaeger,
+    )  # type: ignore
 
     propagator = Jaeger()
-    current_span = trace.get_current_span()
     return propagator.inject({})
 
 

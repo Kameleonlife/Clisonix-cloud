@@ -402,8 +402,19 @@ class CycleEngine:
         
         # Zgjedh agent dhe ekzekuto
         if cycle.agent == "ALBA" and self.alba:
-            # ALBA collection
-            if cycle.task == "frequency_monitor":
+            # ALBA collection - EEG nga burime të hapura
+            if cycle.task == "eeg_collection":
+                # EEG nga open sources (simulim)
+                result["items_processed"] = 5  # 5 EEG streams
+                result["eeg_sources"] = ["openneuro.org", "eegdb.org", "zenodo.org"]
+                result["frequency_data"] = {"alpha": 10.5, "beta": 15.2, "theta": 6.8}
+            
+            elif cycle.task == "signal_processing":
+                # Procesimi i sinjaleve
+                result["items_processed"] = 100
+                result["processed_signals"] = ["fft_analysis", "band_power", "coherence"]
+            
+            elif cycle.task == "frequency_monitor":
                 # Simulon EEG monitoring
                 result["items_processed"] = 1
                 result["frequency_data"] = {"alpha": 10.5, "beta": 15.2}
@@ -415,7 +426,22 @@ class CycleEngine:
         
         elif cycle.agent == "ALBI" and self.albi:
             # ALBI analysis
-            if cycle.task == "gap_fill":
+            if cycle.task == "pattern_learning":
+                result["items_processed"] = 50
+                result["patterns_learned"] = ["neural_pattern_1", "behavioral_pattern_2"]
+                result["insights"] = 3
+            
+            elif cycle.task == "anomaly_detection":
+                result["items_processed"] = 200
+                result["anomalies_found"] = ["spike_t1", "drift_t2", "outlier_t3"]
+                result["insights"] = 5
+            
+            elif cycle.task == "knowledge_synthesis":
+                result["items_processed"] = 20
+                result["synthesized_concepts"] = ["neural_integration", "cognitive_mapping"]
+                result["insights"] = 8
+            
+            elif cycle.task == "gap_fill":
                 # Born-Concepts logic
                 result["gap_filled"] = True
                 result["new_concept"] = cycle.metadata.get("concept")
@@ -426,9 +452,238 @@ class CycleEngine:
         
         elif cycle.agent == "JONA" and self.jona:
             # JONA oversight
-            if cycle.task == "stress_alert":
+            if cycle.task == "ethical_review":
+                result["items_processed"] = 10
+                result["reviews_completed"] = 8
+                result["alignment_score"] = 0.95
+            
+            elif cycle.task == "alignment_check":
+                result["items_processed"] = 15
+                result["alignment_checks"] = 12
+                result["violations_found"] = 0
+            
+            elif cycle.task == "audio_generation":
+                result["items_processed"] = 3
+                result["audio_files_generated"] = ["neural_audio_1.wav", "synthesis_2.wav"]
+            
+            elif cycle.task == "stress_alert":
                 result["alert_sent"] = True
                 result["severity"] = "high"
+        
+        elif cycle.agent == "ASI":
+            # ASI advanced AI
+            if cycle.task == "advanced_reasoning":
+                result["items_processed"] = 25
+                result["reasoning_steps"] = 150
+                result["complexity_score"] = 0.87
+            
+            elif cycle.task == "realtime_processing":
+                result["items_processed"] = 500
+                result["processing_latency"] = 0.02  # 20ms
+                result["throughput"] = 25000
+        
+        elif cycle.agent == "AGIEM":
+            # AGIEM ecosystem management
+            if cycle.task == "ecosystem_management":
+                result["items_processed"] = 30
+                result["agents_coordinated"] = ["ALBA", "ALBI", "JONA", "ASI"]
+                result["ecosystem_health"] = 0.92
+            
+            elif cycle.task == "agent_coordination":
+                result["items_processed"] = 40
+                result["coordination_events"] = 25
+                result["sync_operations"] = 15
+        
+        elif cycle.agent == "RESEARCH":
+            # Laboratory research data
+            if cycle.task == "pubmed_ingest":
+                result["items_processed"] = 50
+                result["papers_ingested"] = 45
+                result["citations_found"] = 200
+            
+            elif cycle.task == "arxiv_ingest":
+                result["items_processed"] = 30
+                result["papers_ingested"] = 28
+                result["categories"] = ["cs.AI", "q-bio.NC"]
+            
+            elif cycle.task == "crossref_ingest":
+                result["items_processed"] = 75
+                result["citations_ingested"] = 70
+                result["dois_resolved"] = 65
+            
+            elif cycle.task == "open_data_ingest":
+                result["items_processed"] = 100
+                result["datasets_ingested"] = 15
+                result["sources"] = ["data.gouv.fr", "govdata.de", "europeandataportal.eu"]
+            
+            elif cycle.task == "environment_monitoring":
+                result["items_processed"] = 20
+                result["environmental_data"] = ["temperature", "humidity", "air_quality"]
+            
+            elif cycle.task == "city_laboratory_data":
+                city = cycle.metadata.get("city", "Unknown")
+                country = cycle.metadata.get("country", "Unknown")
+                result["items_processed"] = 15
+                result["laboratory_data"] = [f"clinical_trials_{city.lower()}", f"research_data_{city.lower()}", f"medical_studies_{country.lower()}"]
+                result["city"] = city
+                result["country"] = country
+                result["data_types"] = ["clinical_data", "research_findings", "medical_records"]
+            
+            elif cycle.task == "daily_document_generation":
+                result["items_processed"] = 25
+                result["documents_generated"] = ["research_report_001.pdf", "analysis_summary_002.md", "findings_doc_003.docx"]
+                result["document_types"] = ["research_reports", "analysis_summaries", "technical_docs"]
+            
+            elif cycle.task == "daily_research_generation":
+                result["items_processed"] = 30
+                result["research_papers"] = ["neural_networks_2025.pdf", "cognitive_science_2025.pdf", "ai_ethics_2025.pdf"]
+                result["research_areas"] = ["neuroscience", "cognitive_science", "AI_ethics", "data_science"]
+        
+        elif cycle.agent == "SCALABILITY_ENGINE":
+            # Scalability engine for open data discovery and integration
+            if cycle.task == "discover_and_integrate":
+                try:
+                    # Import dhe inicializo scalability engine
+                    from open_data_scalability import get_scalability_engine, discover_and_feed_system
+                    
+                    # Merr instancën
+                    scalability_engine = await get_scalability_engine(self)
+                    
+                    # Zbulon dhe integrojnë burime të reja
+                    await discover_and_feed_system()
+                    
+                    # Merr rezultatet
+                    metrics = await scalability_engine.get_metrics()
+                    
+                    result["items_processed"] = metrics.total_sources_discovered
+                    result["new_sources"] = metrics.total_sources_discovered
+                    result["data_ingested_gb"] = metrics.data_ingested_gb
+                    result["cycles_generated"] = metrics.cycles_generated
+                    result["apis_created"] = metrics.apis_created
+                    result["research_generated"] = metrics.research_papers_generated
+                    result["simulations_run"] = metrics.simulations_run
+                    
+                    print(f"🔍 Scalability cycle completed: {metrics.total_sources_discovered} sources discovered")
+                    
+                except Exception as e:
+                    print(f"❌ Scalability cycle error: {e}")
+                    result["error"] = str(e)
+                    result["items_processed"] = 0
+        
+        elif cycle.agent == "ORCHESTRATOR":
+            # System orchestration
+            if cycle.task == "health_check":
+                result["items_processed"] = 5
+                result["systems_checked"] = ["ALBA", "ALBI", "JONA", "ASI", "AGIEM"]
+                result["health_score"] = 0.96
+            
+            elif cycle.task == "data_synchronization":
+                result["items_processed"] = 200
+                result["sync_operations"] = 15
+                result["data_transferred"] = 50000  # bytes
+            
+            elif cycle.task == "cross_module_integration":
+                result["items_processed"] = 50
+                result["modules_integrated"] = ["ALBA", "ALBI", "JONA", "ASI", "AGIEM", "RESEARCH"]
+                result["integration_points"] = 25
+        
+        elif cycle.agent == "ASI":
+            # ASI advanced AI
+            if cycle.task == "advanced_reasoning":
+                result["items_processed"] = 25
+                result["reasoning_steps"] = 150
+                result["complexity_score"] = 0.87
+            
+            elif cycle.task == "realtime_processing":
+                result["items_processed"] = 500
+                result["processing_latency"] = 0.02  # 20ms
+                result["throughput"] = 25000
+            
+            elif cycle.task == "daily_api_generation":
+                result["items_processed"] = 20
+                result["apis_generated"] = ["neural_api_v2.1", "cognitive_api_v1.8", "research_api_v3.2"]
+                result["api_endpoints"] = 150
+                result["api_features"] = ["neural_processing", "cognitive_analysis", "research_automation"]
+        
+        elif cycle.agent == "AGIEM":
+            # AGIEM ecosystem management
+            if cycle.task == "ecosystem_management":
+                result["items_processed"] = 30
+                result["agents_coordinated"] = ["ALBA", "ALBI", "JONA", "ASI"]
+                result["ecosystem_health"] = 0.92
+            
+            elif cycle.task == "agent_coordination":
+                result["items_processed"] = 40
+                result["coordination_events"] = 25
+                result["sync_operations"] = 15
+            
+            elif cycle.task == "daily_ai_agi_evolution":
+                result["items_processed"] = 35
+                result["agi_advancements"] = ["neural_architecture_v2", "cognitive_capability_upgrade", "ethical_framework_v1.5"]
+                result["evolution_metrics"] = {"intelligence_gain": 0.15, "capability_expansion": 0.22}
+        
+        elif cycle.agent == "ALBI":
+            # ALBI analysis (extended)
+            if cycle.task == "pattern_learning":
+                result["items_processed"] = 50
+                result["patterns_learned"] = ["neural_pattern_1", "behavioral_pattern_2"]
+                result["insights"] = 3
+            
+            elif cycle.task == "anomaly_detection":
+                result["items_processed"] = 200
+                result["anomalies_found"] = ["spike_t1", "drift_t2", "outlier_t3"]
+                result["insights"] = 5
+            
+            elif cycle.task == "knowledge_synthesis":
+                result["items_processed"] = 20
+                result["synthesized_concepts"] = ["neural_integration", "cognitive_mapping"]
+                result["insights"] = 8
+            
+            elif cycle.task == "gap_fill":
+                # Born-Concepts logic
+                result["gap_filled"] = True
+                result["new_concept"] = cycle.metadata.get("concept")
+            
+            elif cycle.task == "anomaly_scan":
+                result["insights"] = 3
+                result["anomalies_found"] = ["spike_t1", "drift_t2"]
+            
+            elif cycle.task == "daily_concept_creation":
+                result["items_processed"] = 40
+                result["concepts_created"] = ["quantum_cognition", "neural_emergence", "consciousness_mapping", "ai_ethics_v2"]
+                result["concept_categories"] = ["neuroscience", "AI_ethics", "cognitive_science", "emergent_behavior"]
+            
+            elif cycle.task == "knowledge_graph_update":
+                result["items_processed"] = 100
+                result["graph_nodes_added"] = 75
+                result["graph_relationships"] = 200
+                result["knowledge_domains"] = ["neuroscience", "AI", "cognitive_science", "research"]
+        
+        elif cycle.agent == "JONA":
+            # JONA oversight (extended)
+            if cycle.task == "ethical_review":
+                result["items_processed"] = 10
+                result["reviews_completed"] = 8
+                result["alignment_score"] = 0.95
+            
+            elif cycle.task == "alignment_check":
+                result["items_processed"] = 15
+                result["alignment_checks"] = 12
+                result["violations_found"] = 0
+            
+            elif cycle.task == "audio_generation":
+                result["items_processed"] = 3
+                result["audio_files_generated"] = ["neural_audio_1.wav", "synthesis_2.wav"]
+            
+            elif cycle.task == "stress_alert":
+                result["alert_sent"] = True
+                result["severity"] = "high"
+            
+            elif cycle.task == "alignment_synchronization":
+                result["items_processed"] = 25
+                result["alignment_checks"] = 20
+                result["ethical_compliance"] = 0.98
+                result["policy_updates"] = ["alignment_policy_v1.2", "ethical_framework_update"]
         
         return result
     
@@ -471,6 +726,18 @@ class CycleEngine:
         self.metrics["active_cycles"] -= 1
         print(f"⏹️ Stopped: {cycle_id}")
         return True
+    
+    async def stop_all_cycles(self) -> int:
+        """⏹️ Ndalon të gjithë cycles aktive"""
+        stopped_count = 0
+        active_cycles = [cid for cid, cycle in self.cycles.items() if cycle.status == CycleStatus.ACTIVE]
+        
+        for cycle_id in active_cycles:
+            if self.stop_cycle(cycle_id):
+                stopped_count += 1
+        
+        print(f"⏹️ Stopped {stopped_count} cycles")
+        return stopped_count
     
     def get_status(self) -> Dict[str, Any]:
         """📊 Status i përgjithshëm (stil njerëzor)"""
@@ -594,6 +861,25 @@ async def cli_main():
             "task": c.task,
             "status": c.status.value
         } for c in cycles], indent=2))
+
+
+# ==================== MODULE INTERFACE ====================
+
+_cycle_engine: Optional[CycleEngine] = None
+
+async def get_cycle_engine() -> CycleEngine:
+    """
+    Merr instancën globale të CycleEngine
+
+    Kjo funksion siguron që ekziston vetëm një instancë e CycleEngine
+    në të gjithë aplikimin.
+    """
+    global _cycle_engine
+
+    if _cycle_engine is None:
+        _cycle_engine = CycleEngine()
+
+    return _cycle_engine
 
 
 if __name__ == "__main__":

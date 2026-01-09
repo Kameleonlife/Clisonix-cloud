@@ -1,12 +1,9 @@
-﻿import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import type { Metadata } from "next";
 import "./globals.css";
 import { RequestLogger } from "../src/components/telemetry/RequestLogger";
 
-const inter = Inter({
-  variable: "--font-inter",
-  subsets: ["latin"],
-});
+// Use system fonts as fallback instead of Google Fonts to avoid network errors
+const fontClassName = "font-sans";
 
 export const metadata: Metadata = {
   title: "Clisonix Cloud - Industrial AGI Dashboard",
@@ -19,16 +16,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body
-        className={`${inter.variable} antialiased`}
-        suppressHydrationWarning
-      >
+    <html lang="en" className="dark">
+      <body className={fontClassName}>
         <RequestLogger />
         {children}
       </body>
     </html>
   );
 }
-
-

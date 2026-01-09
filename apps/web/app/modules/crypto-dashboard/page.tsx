@@ -27,7 +27,7 @@ export default function CryptoDashboard() {
     const fetchCryptoData = async () => {
       try {
         setIsLoading(true);
-        const response = await fetch('http://localhost:8000/api/crypto/market');
+        const response = await fetch('/api/crypto/market');
         
         if (!response.ok) {
           throw new Error(`API error: ${response.status}`);

@@ -1,0 +1,49 @@
+# .github/workflows/deploy-helm.yml
+# Workflow për të ngritur një mjedis Kubernetes (me kind) dhe për të instaluar Helm.
+# Ky shërben si bazë për Continuous Deployment në Kubernetes.
+
+name: "Deploy to Kubernetes with Helm"
+
+on:
+  workflow_dispatch: # Lejon aktivizimin manual
+
+jobs:
+  deploy-to-kind:
+    name: "Deploy to kind (Kubernetes-in-Docker)"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up kind (Kubernetes-in-Docker)
+        # Përdor një action të gatshëm për të krijuar një kluster Kubernetes për testim
+        uses: helm/kind-action@v1.4.0
+        # Ky hap e bën 'kubectl' të disponueshëm dhe të konfiguruar për klusterin e ri
+
+      - name: Set up Helm
+        # Përdor një action të gatshëm për të instaluar versionin e fundit të Helm
+        uses: azure/setup-helm@v3
+        with:
+          # Specifikon versionin e Helm, ose mund ta lëmë bosh për të marrë të fundit
+          version: 'v3.10.1'
+        id: install
+
+      - name: Verify Kubernetes and Helm setup
+        run: |
+          echo "Verifying kubectl connection..."
+          kubectl cluster-info
+          echo -e "\nVerifying Helm installation..."
+          helm version
+
+      - name: Deploy application with Helm
+        # Ky është hapi ku do të ekzekutohej komanda juaj 'helm'
+        # Shembull: helm upgrade --install <release-name> <chart-path>
+        run: |
+          echo "Helm chart deployment step (placeholder)"
+          echo "Replace this with your 'helm upgrade' or 'helm install' command."
+          # Shembull i komentuar:
+          # helm upgrade --install clisonix-api ./charts/clisonix-api \
+          #   --namespace default \
+          #   --set image.repository=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }} \
+          #   --set image.tag=${{ github.sha }}

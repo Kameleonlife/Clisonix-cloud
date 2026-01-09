@@ -1,112 +1,120 @@
+"""
+YouTube Insight Engine - REAL YouTube API Analysis
+Analyzes video metadata, trends, engagement
+"""
+
+import logging
+from typing import Dict, Any
+
+logger = logging.getLogger(__name__)
+
+
 class YouTubeInsightEngine:
-
-    def analyze(self, meta: dict) -> dict:
-        snippet = meta.get("snippet", {})
-        stats = meta.get("statistics", {})
-        title = snippet.get("title", "")
-        desc = snippet.get("description", "")
-        tags = snippet.get("tags", []) or []
-        
-        # ----------------------------
-        # 1. Emotional Tone (from text)
-        # ----------------------------
-        emotion = self._emotion_from_text(title + " " + desc)
-
-        # ----------------------------
-        # 2. Engagement Score
-        # ----------------------------
-        views = int(stats.get("viewCount", 0))
-        likes = int(stats.get("likeCount", 0)) if "likeCount" in stats else 0
-        comments = int(stats.get("commentCount", 0)) if "commentCount" in stats else 0
-
-        engagement = self._engagement(views, likes, comments)
-
-        # ----------------------------
-        # 3. Core topics (primitive extraction)
-        # ----------------------------
-        topics = self._topics(title, desc, tags)
-
-        # ----------------------------
-        # 4. Trend Potential
-        # ----------------------------
-        trend = self._trend_score(engagement, emotion)
-
-        # ----------------------------
-        # 5. Target Audience
-        # ----------------------------
-        audience = self._audience(topics)
-
-        # ----------------------------
-        # 6. BrainSync recommendation
-        # ----------------------------
-        bs_mode = self._brainsync_mode(emotion)
-
-        return {
-            "title": title,
-            "description": desc,
-            "emotion": emotion,
-            "topics": topics,
-            "engagement_score": engagement,
-            "trend": trend,
-            "target_audience": audience,
-            "recommended_brainsync_mode": bs_mode
-        }
-
-    # ============================
-    # Helper Methods
-    # ============================
-
-    def _emotion_from_text(self, text):
-        text = text.lower()
-        if any(w in text for w in ["amazing","great","wow","love"]):
-            return "positive"
-        if any(w in text for w in ["sad","terrible","cry","pain"]):
-            return "sad"
-        if any(w in text for w in ["angry","mad","fight"]):
-            return "angry"
-        if any(w in text for w in ["calm","peace","relax"]):
-            return "calm"
-        return "neutral"
-
-    def _engagement(self, v, l, c):
-        if v == 0:
-            return 0
-        return round(((l + c) / v) * 1000, 2)
-
-    def _topics(self, title, desc, tags):
-        keywords = []
-        for w in (title + " " + desc).split():
-            if len(w) > 5:
-                keywords.append(w.lower())
-        return list(set(keywords[:10] + tags[:5]))
-
-    def _trend_score(self, engagement, emotion):
-        base = engagement
-        if emotion == "positive":
-            base *= 1.2
-        if emotion == "angry":
-            base *= 1.4
-        if emotion == "sad":
-            base *= 0.8
-        return round(min(base, 100), 2)
-
-    def _audience(self, topics):
-        if any("finance" in t for t in topics):
-            return "adults/investors"
-        if any("gaming" in t for t in topics):
-            return "teens/gamers"
-        if any("tutorial" in t for t in topics):
-            return "general learners"
-        return "general"
-
-    def _brainsync_mode(self, emotion):
-        mapping = {
-            "positive": "motivation",
-            "angry": "recovery",
-            "sad": "recovery",
-            "calm": "relax",
-            "neutral": "focus"
-        }
-        return mapping.get(emotion, "relax")
-
-
+    """Analyze YouTube videos with REAL metadata"""
+    
+    def analyze(self, metadata: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Analyze REAL YouTube video metadata
+        Input: YouTube API response (snippet, statistics, contentDetails)
+        """
+        try:
+            snippet = metadata.get('snippet', {})
+            stats = metadata.get('statistics', {})
+            
+            # REAL METRICS
+            view_count = int(stats.get('viewCount', 0))
+            like_count = int(stats.get('likeCount', 0))
+            comment_count = int(stats.get('commentCount', 0))
+            
+            # ENGAGEMENT RATE (real calculation)
+            engagement_rate = 0.0
+            if view_count > 0:
+                engagement_rate = ((like_count + comment_count) / view_count) * 100
+            
+            # EMOTIONAL TONE (from title/description sentiment)
+            title = snippet.get('title', '').lower()
+            description = snippet.get('description', '').lower()
+            
+            positive_words = ['amazing', 'love', 'best', 'great', 'awesome', 'beautiful', 'perfect']
+            negative_words = ['hate', 'worst', 'terrible', 'bad', 'awful', 'horrible']
+            
+            positive_count = sum(1 for word in positive_words if word in title or word in description)
+            negative_count = sum(1 for word in negative_words if word in title or word in description)
+            
+            if positive_count > negative_count:
+                emotional_tone = "positive"
+                sentiment_score = 0.5 + (positive_count / 10)
+            elif negative_count > positive_count:
+                emotional_tone = "negative"
+                sentiment_score = 0.5 - (negative_count / 10)
+            else:
+                emotional_tone = "neutral"
+                sentiment_score = 0.5
+            
+            # CORE INSIGHTS
+            insights = []
+            
+            if engagement_rate > 5.0:
+                insights.append("High audience engagement - strong community")
+            elif engagement_rate < 1.0:
+                insights.append("Low engagement - consider more interactive content")
+            
+            if view_count > 100000:
+                insights.append("Viral potential detected")
+            
+            if like_count > view_count * 0.05:
+                insights.append("Strong positive reception")
+            
+            # TREND POTENTIAL (based on real metrics)
+            trend_score = min(100, (
+                (view_count / 1000) * 0.3 +
+                engagement_rate * 5 +
+                (like_count / 100) * 0.2
+            ))
+            
+            # TARGET AUDIENCE (inferred from category and tags)
+            category = snippet.get('categoryId', 'Unknown')
+            tags = snippet.get('tags', [])
+            
+            # RECOMMENDED BRAIN-SYNC
+            if emotional_tone == "positive" and engagement_rate > 3:
+                brain_sync = "motivation"
+            elif "relax" in title or "calm" in title:
+                brain_sync = "relax"
+            elif "focus" in title or "study" in title:
+                brain_sync = "focus"
+            elif "sleep" in title or "meditation" in title:
+                brain_sync = "sleep"
+            else:
+                brain_sync = "creativity"
+            
+            return {
+                "metadata": {
+                    "title": snippet.get('title'),
+                    "channel": snippet.get('channelTitle'),
+                    "published_at": snippet.get('publishedAt'),
+                    "category_id": category
+                },
+                "real_metrics": {
+                    "views": view_count,
+                    "likes": like_count,
+                    "comments": comment_count,
+                    "engagement_rate_percent": round(engagement_rate, 2)
+                },
+                "emotional_tone": {
+                    "tone": emotional_tone,
+                    "sentiment_score": round(sentiment_score, 2)
+                },
+                "core_insights": insights,
+                "trend_potential": round(trend_score, 2),
+                "target_audience": {
+                    "category": category,
+                    "tags": tags[:10],
+                    "estimated_age_group": "18-34" if engagement_rate > 3 else "all_ages"
+                },
+                "recommended_brain_sync": brain_sync
+            }
+            
+        except Exception as e:
+            logger.error(f"YouTube insight error: {e}")
+            return {"error": str(e)}

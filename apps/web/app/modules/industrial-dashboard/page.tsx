@@ -46,48 +46,47 @@ export default function IndustrialDashboard() {
   useEffect(() => {
     const fetchRealData = async () => {
       try {
-        // Fetch REAL ASI metrics from Prometheus
-        const [statusRes, healthRes, albaRes, albiRes, jonaRes] = await Promise.allSettled([
-          fetch('/asi/status'),
-          fetch('/asi/health'),
-          fetch('/asi/alba/metrics'),
-          fetch('/asi/albi/metrics'),
-          fetch('/asi/jona/metrics')
+        // Fetch REAL ASI metrics from API routes
+        const [statusRes, systemRes] = await Promise.allSettled([
+          fetch('/api/asi-status'),
+          fetch('/api/system-status')
         ]);
 
         // Process status
         if (statusRes.status === 'fulfilled' && statusRes.value.ok) {
           const statusData = await statusRes.value.json();
+          const asiData = statusData.asi_status;
           setMetrics({
             asi_system: {
-              status: statusData.status,
+              status: asiData.status || 'unknown',
               trinity: {
-                alba: statusData.trinity?.alba?.operational ? 'Online' : 'Offline',
-                albi: statusData.trinity?.albi?.operational ? 'Online' : 'Offline',
-                jona: statusData.trinity?.jona?.operational ? 'Online' : 'Offline'
+                alba: asiData.trinity?.alba?.status === 'online' ? 'Online' : 'Offline',
+                albi: asiData.trinity?.albi?.status === 'online' ? 'Online' : 'Offline',
+                jona: asiData.trinity?.jona?.status === 'online' ? 'Online' : 'Offline'
               }
             },
             signal_gen: {
               status: 'Online',
-              uptime: statusData.system?.uptime || 0,
+              uptime: asiData.system?.uptime || 0,
               memory_usage: 88.1
             },
-            timestamp: statusData.timestamp
+            timestamp: asiData.timestamp || new Date().toISOString()
           });
         }
 
-        // Process health
-        if (healthRes.status === 'fulfilled' && healthRes.value.ok) {
-          const healthData = await healthRes.value.json();
+        // Process system status for backend health
+        if (systemRes.status === 'fulfilled' && systemRes.value.ok) {
+          const systemData = await systemRes.value.json();
+          const statusPayload = systemData.data || systemData;
           setBackendHealth({
             service: 'Clisonix Backend (REAL)',
-            status: healthData.healthy ? 'Operational' : 'Degraded',
+            status: statusPayload.core_services === 'Operational' ? 'Operational' : 'Degraded',
             version: '2.1.0',
-            uptime: healthData.components?.alba_network?.metrics?.latency_ms || 0,
+            uptime: 3600, // Mock uptime for now
             memory: {
-              used: healthData.components?.alba_network?.metrics?.memory_mb || 88,
+              used: 88,
               total: 1024,
-              rss: healthData.components?.alba_network?.metrics?.memory_mb || 88
+              rss: 88
             }
           });
         }

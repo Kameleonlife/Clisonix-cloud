@@ -30,7 +30,7 @@ export default function WeatherDashboard() {
     const fetchWeatherData = async () => {
       try {
         setIsLoading(true);
-        const response = await fetch('http://localhost:8000/api/weather/multiple-cities');
+        const response = await fetch('/api/weather/multiple-cities');
         
         if (!response.ok) {
           throw new Error(`API error: ${response.status}`);

@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Request, Response, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import (
+    APIRouter, Request, HTTPException, WebSocket, WebSocketDisconnect
+)
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional
@@ -19,7 +21,9 @@ class AlbaStatus(BaseModel):
 
 
 class StreamStartRequest(BaseModel):
-    stream_id: Optional[str] = Field(None, description="Custom stream identifier")
+    stream_id: Optional[str] = Field(
+        None, description="Custom stream identifier"
+    )
     description: Optional[str] = None
     sampling_rate_hz: Optional[int] = Field(256, ge=1)
     channels: Optional[List[str]] = None
@@ -113,12 +117,14 @@ async def alba_status() -> AlbaStatus:
         timestamp=datetime.now().isoformat(),
     )
 
+
 # Endpoint GET: Kthen CBOR
 @router.get("/alba/cbor", response_class=Response)
 async def get_cbor():
     data = {"status": "ok", "timestamp": "2025-10-09", "module": "alba"}
     cbor_bytes = cbor2.dumps(data)
     return Response(content=cbor_bytes, media_type="application/cbor")
+
 
 # Endpoint POST: Pranon CBOR
 @router.post("/alba/cbor", response_class=Response)
@@ -130,7 +136,9 @@ async def post_cbor(request: Request):
             "error": "Empty CBOR payload",
             "timestamp": datetime.now().isoformat(),
         }
-        return Response(content=cbor2.dumps(payload), media_type="application/cbor")
+        return Response(
+            content=cbor2.dumps(payload), media_type="application/cbor"
+        )
 
     try:
         data = cbor2.loads(body)
@@ -139,17 +147,26 @@ async def post_cbor(request: Request):
             "data": data,
             "timestamp": datetime.now().isoformat(),
         }
-        return Response(content=cbor2.dumps(response), media_type="application/cbor")
+        return Response(
+            content=cbor2.dumps(response), media_type="application/cbor"
+        )
     except Exception as e:
         error = {
             "received": False,
             "error": str(e),
             "timestamp": datetime.now().isoformat(),
         }
-        return Response(content=cbor2.dumps(error), media_type="application/cbor", status_code=400)
+        return Response(
+            content=cbor2.dumps(error),
+            media_type="application/cbor",
+            status_code=400
+        )
+
 
 @router.post("/streams/start", response_model=StreamStartResponse)
-async def start_data_stream(stream_config: StreamStartRequest) -> StreamStartResponse:
+async def start_data_stream(
+    stream_config: StreamStartRequest,
+) -> StreamStartResponse:
     """Start a new data collection stream"""
     stream_id = stream_config.stream_id or f"stream_{len(active_streams) + 1}"
 
@@ -190,10 +207,18 @@ def _serialize_streams() -> Dict[str, StreamInfo]:
         end_time = payload.get("end_time")
         serialized[sid] = StreamInfo(
             config=payload.get("config", {}),
-            start_time=start_time.isoformat() if isinstance(start_time, datetime) else str(start_time),
+            start_time=(
+                start_time.isoformat()
+                if isinstance(start_time, datetime)
+                else str(start_time)
+            ),
             data_points=payload.get("data_points", 0),
             status=payload.get("status", "unknown"),
-            end_time=end_time.isoformat() if isinstance(end_time, datetime) else None,
+            end_time=(
+                end_time.isoformat()
+                if isinstance(end_time, datetime)
+                else None
+            ),
         )
     return serialized
 
@@ -201,10 +226,15 @@ def _serialize_streams() -> Dict[str, StreamInfo]:
 @router.get("/streams", response_model=StreamsOverview)
 async def get_active_streams() -> StreamsOverview:
     """Get all active data streams"""
-    return StreamsOverview(active_streams=_serialize_streams(), total_streams=len(active_streams))
+    return StreamsOverview(
+        active_streams=_serialize_streams(), total_streams=len(active_streams)
+    )
+
 
 @router.get("/streams/{stream_id}/data", response_model=StreamDataResponse)
-async def get_stream_data(stream_id: str, limit: int = 100) -> StreamDataResponse:
+async def get_stream_data(
+    stream_id: str, limit: int = 100
+) -> StreamDataResponse:
     """Get collected data from specific stream"""
     if stream_id not in active_streams:
         raise HTTPException(status_code=404, detail="Stream not found")
@@ -226,12 +256,33 @@ async def get_stream_data(stream_id: str, limit: int = 100) -> StreamDataRespons
     }
     
     stream_info = _serialize_streams().get(stream_id)
-    metadata_payload = stream_info.dict() if stream_info else simulated_data["metadata"]
+    if not stream_info:
+        raise HTTPException(
+            status_code=404,
+            detail="Stream info could not be serialized"
+        )
+
+    data_points_list: List[StreamDataPoint] = []
+    points_data: List[Dict[str, Any]] = list(simulated_data.get(
+        "data_points", []
+    ))
+    for point in points_data:
+        data_points_list.append(
+            StreamDataPoint(
+                timestamp=point.get("timestamp", ""),
+                channel_1=float(point.get("channel_1", 0.0)),
+                channel_2=float(point.get("channel_2", 0.0)),
+                channel_3=float(point.get("channel_3", 0.0)),
+                signal_quality=float(point.get("signal_quality", 0.0)),
+            )
+        )
+
     return StreamDataResponse(
         stream_id=stream_id,
-        data_points=[StreamDataPoint(**point) for point in simulated_data["data_points"]],
-        metadata=metadata_payload,
+        data_points=data_points_list,
+        metadata=active_streams.get(stream_id, {}),
     )
+
 
 @router.websocket("/ws/{stream_id}")
 async def websocket_data_stream(websocket: WebSocket, stream_id: str):
@@ -263,8 +314,11 @@ async def websocket_data_stream(websocket: WebSocket, stream_id: str):
     except WebSocketDisconnect:
         print(f"WebSocket disconnected for stream {stream_id}")
 
+
 @router.post("/config", response_model=CollectionConfigResponse)
-async def update_collection_config(config: CollectionConfigUpdate) -> CollectionConfigResponse:
+async def update_collection_config(
+    config: CollectionConfigUpdate,
+) -> CollectionConfigResponse:
     """Update data collection configuration"""
     global stream_configs
     payload = config.dict(exclude_none=True)
@@ -273,14 +327,20 @@ async def update_collection_config(config: CollectionConfigUpdate) -> Collection
     if payload:
         stream_configs.update(payload)
 
-    return CollectionConfigResponse(message="Configuration updated", new_config=stream_configs)
+    return CollectionConfigResponse(
+        message="Configuration updated", new_config=stream_configs
+    )
 
 
 @router.get("/metrics", response_model=CollectionMetrics)
 async def get_collection_metrics() -> CollectionMetrics:
     """Get data collection metrics"""
-    total_data_points = sum(stream["data_points"] for stream in active_streams.values())
-    active_streams_count = len([s for s in active_streams.values() if s["status"] == "active"])
+    total_data_points = sum(
+        stream["data_points"] for stream in active_streams.values()
+    )
+    active_streams_count = len(
+        [s for s in active_streams.values() if s["status"] == "active"]
+    )
 
     return CollectionMetrics(
         total_data_points=total_data_points,
@@ -299,6 +359,6 @@ async def health_check() -> AlbaHealth:
         module="ALBA",
         status="healthy",
         timestamp=datetime.now().isoformat(),
-        version="1.0.0",
+        version="1.2.3",
     )
 

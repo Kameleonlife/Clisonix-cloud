@@ -13,6 +13,9 @@
 secrets/
 *.secret
 *_secret.txt
+*.key
+*.pem
+*.crt
 
 # Database
 *.db

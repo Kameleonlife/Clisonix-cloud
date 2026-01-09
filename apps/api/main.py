@@ -1,5 +1,10 @@
 # -*- coding: utf-8 -*-
-# --- CONSOLIDATED IMPORTS (MUST COME FIRST) ---
+"""
+Clisonix Cloud API - Main Application File
+Copyright (c) 2025 Ledjan Ahmati. All rights reserved.
+"""
+
+# --- Standard Library Imports ---
 import os
 import sys
 import time
@@ -8,8 +13,9 @@ import uuid
 import socket
 import asyncio
 import logging
-import traceback
 import tempfile
+import traceback
+import io
 from pathlib import Path
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any, List
@@ -18,49 +24,463 @@ from collections import defaultdict
 from itertools import islice
 from glob import glob
 
-# FastAPI / ASGI
-from fastapi import FastAPI, UploadFile, File, Request, HTTPException, APIRouter, Form
+# --- Third-Party Imports ---
+import requests
+import numpy as np
+
+# FastAPI & Starlette
+from fastapi import (
+    FastAPI, UploadFile, File, Request, HTTPException, APIRouter, Form, Depends, Header
+)
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.responses import Response
 
 # Pydantic
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
-# Try importing BaseSettings from the correct location (Pydantic v2)
 try:
     from pydantic_settings import BaseSettings
 except ImportError:
-    # Fallback for older Pydantic versions
-    try:
-        from pydantic import BaseSettings
-    except ImportError:
-        # If still not available, create a minimal base class
-        class BaseSettings:
-            class Config:
-                case_sensitive = True
+    from pydantic import BaseSettings
 
-# System metrics
+# Optional Core Libraries (graceful degradation)
 try:
-    import psutil
+    import psutil  # type: ignore
     _PSUTIL = True
-except Exception:
+except ImportError:
     _PSUTIL = False
 
-# HTTP
-import requests
+try:
+    import redis.asyncio as aioredis
+    _REDIS = True
+except ImportError:
+    _REDIS = False
+    aioredis = None
 
-# --- Brain Router Initialization (must come after imports) ---
-brain_router = APIRouter(prefix="/brain", tags=["brain"])
+try:
+    import asyncpg
+    _PG = True
+except ImportError:
+    _PG = False
+    asyncpg = None
 
-# Assume 'cog' is the cognitive engine instance
+try:
+    import mne
+    from scipy.signal import welch
+    _EEG = True
+except ImportError:
+    _EEG = False
+
+try:
+    import librosa
+    import soundfile as sf
+    _AUDIO = True
+except ImportError:
+    _AUDIO = False
+
+# --- Local Application Imports ---
+# Note: Some are imported inside functions to avoid circular dependencies or slow startup.
+try:
+    from albi_core import AlbiCore  # type: ignore
+except ImportError:
+    AlbiCore = None  # type: ignore
+
 try:
     from brain_engine import cog
 except ImportError:
     cog = None
 
-# --- YouTube Insight Generator Endpoint ---
+from metrics import MetricsMiddleware, get_metrics
+
+# --- API Key System for Monetization ---
+import secrets
+import hashlib
+from collections import defaultdict
+
+# API Key System Models
+class UserCreate(BaseModel):
+    email: str
+    plan: str = "free"
+
+class UserResponse(BaseModel):
+    id: str
+    email: str
+    plan: str
+    created_at: datetime
+
+class APIKeyCreateResponse(BaseModel):
+    id: str
+    api_key: str
+
+class APIKeyItem(BaseModel):
+    id: str
+    prefix: str
+    status: str
+    created_at: datetime
+    last_used_at: Optional[datetime]
+
+class APIKeyRevokeRequest(BaseModel):
+    key_id: str
+
+# In-memory storage for demo (replace with database in production)
+users_db: Dict[str, Dict[str, Any]] = {}
+api_keys_db: Dict[str, Dict[str, Any]] = {}
+api_usage_db: Dict[str, Dict[str, int]] = defaultdict(dict)  # key_id -> {window: count}
+
+# API Key Security Functions
+API_KEY_PREFIX = "CLI_live_"
+
+def generate_api_key() -> str:
+    """Generate a secure API key"""
+    raw = secrets.token_urlsafe(32)
+    return f"{API_KEY_PREFIX}{raw}"
+
+def hash_api_key(api_key: str) -> str:
+    """Hash API key for storage"""
+    return hashlib.sha256(api_key.encode()).hexdigest()
+
+def verify_api_key(api_key: str, key_hash: str) -> bool:
+    """Verify API key against hash"""
+    return hash_api_key(api_key) == key_hash
+
+def extract_prefix(api_key: str) -> str:
+    """Extract prefix for indexing"""
+    return api_key[:20] if len(api_key) > 20 else api_key
+
+def get_rate_limit(plan: str) -> Dict[str, int]:
+    """Get rate limits based on plan"""
+    limits = {
+        "free": {"daily": 100, "per_second": 1},
+        "pro": {"daily": 10000, "per_second": 10},
+        "enterprise": {"daily": 100000, "per_second": 100}
+    }
+    return limits.get(plan, limits["free"])
+
+def check_rate_limit(key_id: str, plan: str) -> bool:
+    """Check if request is within rate limits"""
+    limits = get_rate_limit(plan)
+    now = datetime.now(timezone.utc)
+    today = now.strftime("%Y-%m-%d")
+    current_second = now.strftime("%Y-%m-%d %H:%M:%S")
+
+    # Check daily limit
+    daily_key = f"{key_id}:{today}"
+    daily_count = api_usage_db.get(daily_key, 0)
+    if daily_count >= limits["daily"]:
+        return False
+
+    # Check per-second limit (simplified)
+    second_key = f"{key_id}:{current_second}"
+    second_count = api_usage_db.get(second_key, 0)
+    if second_count >= limits["per_second"]:
+        return False
+
+    # Increment counters
+    api_usage_db[daily_key] = daily_count + 1
+    api_usage_db[second_key] = second_count + 1
+
+    return True
+
+async def get_current_user_from_api_key(authorization: Optional[str] = Header(None, alias="Authorization")) -> Dict[str, Any]:
+    """Extract and validate API key from Authorization header"""
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Authorization header missing")
+
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Invalid authorization format")
+
+    api_key = authorization[7:]  # Remove "Bearer " prefix
+    prefix = extract_prefix(api_key)
+
+    # Find API key in database
+    for key_id, key_data in api_keys_db.items():
+        if key_data["prefix"] == prefix and verify_api_key(api_key, key_data["hash"]):
+            if key_data["status"] != "active":
+                raise HTTPException(status_code=401, detail="API key is inactive")
+
+            # Check rate limits
+            user_id = key_data["user_id"]
+            user = users_db.get(user_id)
+            if not user:
+                raise HTTPException(status_code=401, detail="User not found")
+
+            if not check_rate_limit(key_id, user["plan"]):
+                raise HTTPException(status_code=429, detail="Rate limit exceeded")
+
+            # Update last used
+            key_data["last_used_at"] = datetime.now(timezone.utc)
+
+            return {
+                "user_id": user_id,
+                "key_id": key_id,
+                "plan": user["plan"],
+                "email": user["email"]
+            }
+
+    raise HTTPException(status_code=401, detail="Invalid API key")
+
+# --- Initial Setup & Configuration ---
+
+# Settings
+# pylint: disable=too-few-public-methods
+class Settings(BaseSettings):
+    """Application configuration settings."""
+    api_title: str = "Clisonix Industrial Backend (REAL)"
+    api_version: str = "1.2.3"
+    environment: str = os.getenv("ENVIRONMENT", "production")
+    debug: bool = os.getenv("DEBUG", "false").lower() == "true"
+    log_level: str = os.getenv("LOG_LEVEL", "INFO")
+    storage_dir: str = os.getenv("STORAGE_DIR", "./storage")
+    alba_collector_url: str = os.getenv("ALBA_COLLECTOR_URL", "http://127.0.0.1:8010")
+    mesh_hq_url: str = os.getenv("MESH_HQ_URL", "http://127.0.0.1:7777")
+    redis_url: Optional[str] = os.getenv("REDIS_URL")
+    database_url: Optional[str] = os.getenv("DATABASE_URL")
+    paypal_client_id: Optional[str] = os.getenv("PAYPAL_CLIENT_ID")
+    paypal_secret: Optional[str] = os.getenv("PAYPAL_SECRET")
+    paypal_base: str = os.getenv("PAYPAL_BASE", "https://api-m.sandbox.paypal.com")
+    stripe_api_key: Optional[str] = os.getenv("STRIPE_API_KEY")
+    stripe_base: str = "https://api.stripe.com/v1"
+
+    class Config:
+        case_sensitive = True
+
+settings = Settings()
+
+# Extend module search path
+ROOT_DIR = Path(__file__).resolve().parents[2] # Assuming apps/api/main.py
+if str(ROOT_DIR) not in sys.path:
+    sys.path.append(str(ROOT_DIR))
+
+# Constants
+ALBA_COLLECTOR_TIMEOUT = float(os.getenv("ALBA_COLLECTOR_TIMEOUT", "2.5"))
+CLISONIX_RUNTIME = ROOT_DIR / "backend" / "system" / "runtime"
+CLISONIX_TRIGGER_FILE = CLISONIX_RUNTIME / "triggers.json"
+CLISONIX_SCAN_FILE = CLISONIX_RUNTIME / "scan_results.json"
+MESH_DIR = ROOT_DIR / "backend" / "mesh"
+MESH_STATUS_FILE = MESH_DIR / "nodes_status.json"
+MESH_LOG_DIR = ROOT_DIR / "logs"
+
+# Logging
+def setup_logging():
+    Path("logs").mkdir(exist_ok=True)
+    fmt = "%(asctime)s | %(levelname)s | %(name)s | %(message)s"
+    logging.basicConfig(
+        level=getattr(logging, settings.log_level.upper(), logging.INFO),
+        format=fmt,
+        handlers=[
+            logging.StreamHandler(sys.stdout),
+            logging.FileHandler("logs/Clisonix_real.log", encoding="utf-8")
+        ],
+    )
+    return logging.getLogger("Clisonix_real")
+
+logger = setup_logging()
+
+def get_albi_engine():
+    """Lazy initialization of ALBI_ENGINE to avoid startup issues"""
+    global ALBI_ENGINE
+    if ALBI_ENGINE is None and AlbiCore is not None:
+        try:
+            ALBI_ENGINE = AlbiCore()
+        except Exception as e:
+            logger.warning(f"Failed to initialize AlbiCore: {e}")
+            ALBI_ENGINE = None
+    return ALBI_ENGINE
+
+# --- FastAPI Application Initialization ---
+app = FastAPI(
+    title=settings.api_title,
+    version=settings.api_version,
+    debug=settings.debug,
+)
+
+# --- Middleware ---
+app.add_middleware(MetricsMiddleware)
+# Add other middleware like CORS here if needed
+# app.add_middleware(
+#     CORSMiddleware,
+#     allow_origins=["*"],
+#     allow_credentials=True,
+#     allow_methods=["*"],
+#     allow_headers=["*"],
+# )
+
+
+# --- Schemas (Pydantic Models) ---
+
+class ErrorEnvelope(BaseModel):
+    error: str = ''
+    message: str = ''
+    timestamp: str = ''
+    instance: str = ''
+    correlation_id: str = ''
+    path: Optional[str] = None
+    details: Optional[Any] = None
+
+# ... (add other schemas here if they are used globally)
+
+
+# --- Utility Functions ---
+
+def require(cond: bool, msg: str, code: int = 503, *, error_code: Optional[str] = None):
+    if not cond:
+        detail: Any = {"code": error_code, "message": msg} if error_code else msg
+        raise HTTPException(status_code=code, detail=detail)
+
+def utcnow() -> str:
+    return datetime.utcnow().replace(tzinfo=timezone.utc).isoformat()
+
+def _get_correlation_id(request: Request) -> str:
+    return getattr(request.state, "correlation_id", f"REQ-{int(time.time())}-{uuid.uuid4().hex[:6]}")
+
+def error_response(
+    request: Request, status_code: int, code: str, message: str, *, details: Optional[Any] = None
+) -> JSONResponse:
+    cid = _get_correlation_id(request)
+    body = ErrorEnvelope(
+        error=code,
+        message=message,
+        timestamp=utcnow(),
+        instance=INSTANCE_ID,
+        correlation_id=cid,
+        path=str(request.url),
+        details=details,
+    ).dict(exclude_none=True)
+    return JSONResponse(status_code=status_code, content=body)
+
+def _format_duration(seconds: float) -> str:
+    total_seconds = max(int(seconds), 0)
+    minutes, sec = divmod(total_seconds, 60)
+    hours, minutes = divmod(minutes, 60)
+    days, hours = divmod(hours, 24)
+    parts: List[str] = []
+    if days: parts.append(f"{days}d")
+    if hours: parts.append(f"{hours}h")
+    if minutes: parts.append(f"{minutes}m")
+    if not parts: parts.append(f"{sec}s")
+    return " ".join(parts[:3])
+
+def _load_json(path: Path) -> Optional[Any]:
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        logger.debug("Failed to read %s: %s", path, exc)
+        return None
+
+
+# --- Routers ---
+brain_router = APIRouter(prefix="/brain", tags=["brain"])
+neural_router = APIRouter(prefix="/neural", tags=["neural"])
+industrial_router = APIRouter(prefix="/industrial", tags=["industrial"])
+
+
+# --- API Key Authentication Endpoints ---
+
+@app.post("/auth/users", response_model=UserResponse, tags=["Authentication"])
+async def create_user(user: UserCreate):
+    """Create a new user account"""
+    user_id = str(uuid.uuid4())
+    users_db[user_id] = {
+        "id": user_id,
+        "email": user.email,
+        "plan": user.plan,
+        "created_at": datetime.now(timezone.utc)
+    }
+    return UserResponse(**users_db[user_id])
+
+@app.post("/auth/api-keys", response_model=APIKeyCreateResponse, tags=["Authentication"])
+async def create_api_key(user: UserCreate):
+    """Create a new API key for a user"""
+    # First create or find user
+    user_id = None
+    for uid, user_data in users_db.items():
+        if user_data["email"] == user.email:
+            user_id = uid
+            break
+
+    if not user_id:
+        user_id = str(uuid.uuid4())
+        users_db[user_id] = {
+            "id": user_id,
+            "email": user.email,
+            "plan": user.plan,
+            "created_at": datetime.now(timezone.utc)
+        }
+
+    # Generate API key
+    api_key = generate_api_key()
+    key_id = str(uuid.uuid4())
+    prefix = extract_prefix(api_key)
+
+    api_keys_db[key_id] = {
+        "id": key_id,
+        "user_id": user_id,
+        "prefix": prefix,
+        "hash": hash_api_key(api_key),
+        "status": "active",
+        "created_at": datetime.now(timezone.utc),
+        "last_used_at": None
+    }
+
+    return APIKeyCreateResponse(id=key_id, api_key=api_key)
+
+@app.get("/auth/api-keys", response_model=List[APIKeyItem], tags=["Authentication"])
+async def list_api_keys(current_user: Dict[str, Any] = Depends(get_current_user_from_api_key)):
+    """List all API keys for the authenticated user"""
+    user_keys = []
+    for key_id, key_data in api_keys_db.items():
+        if key_data["user_id"] == current_user["user_id"]:
+            user_keys.append(APIKeyItem(
+                id=key_data["id"],
+                prefix=key_data["prefix"],
+                status=key_data["status"],
+                created_at=key_data["created_at"],
+                last_used_at=key_data["last_used_at"]
+            ))
+    return user_keys
+
+@app.delete("/auth/api-keys/{key_id}", tags=["Authentication"])
+async def revoke_api_key(key_id: str, current_user: Dict[str, Any] = Depends(get_current_user_from_api_key)):
+    """Revoke an API key"""
+    if key_id not in api_keys_db:
+        raise HTTPException(status_code=404, detail="API key not found")
+
+    key_data = api_keys_db[key_id]
+    if key_data["user_id"] != current_user["user_id"]:
+        raise HTTPException(status_code=403, detail="Not authorized to revoke this key")
+
+    key_data["status"] = "revoked"
+    return {"message": "API key revoked successfully"}
+
+# --- API Endpoints ---
+
+# Health Endpoint
+@app.get("/health", tags=["System"])
+async def health_check():
+    # A more comprehensive health check can be developed here
+    return {
+        "service": settings.api_title,
+        "status": "ok",
+        "version": settings.api_version,
+        "timestamp": utcnow(),
+        "instance_id": INSTANCE_ID,
+        "uptime_app_seconds": time.time() - START_TIME,
+    }
+
+# Metrics Endpoint
+@app.get("/metrics", tags=["System"])
+async def metrics():
+    """Prometheus metrics endpoint"""
+    return Response(content=get_metrics(), media_type="text/plain; version=0.0.4")
+
+
+# --- Brain Router Endpoints ---
+
 @brain_router.get("/youtube/insight")
 async def youtube_insight(video_id: str):
     """
@@ -78,8 +498,8 @@ async def youtube_insight(video_id: str):
     """
 
     try:
-        from apps.api.integrations.youtube import _get_json
-        from apps.api.neuro.youtube_insight_engine import YouTubeInsightEngine
+        from integrations.youtube import _get_json
+        from neuro.youtube_insight_engine import YouTubeInsightEngine
         import httpx
 
         engine = YouTubeInsightEngine()
@@ -126,7 +546,7 @@ async def daily_energy_check(file: UploadFile = File(...)):
     """
     try:
         import tempfile
-        from apps.api.neuro.energy_engine import EnergyEngine
+        from neuro.energy_engine import EnergyEngine
 
         # Save audio sample
         with tempfile.NamedTemporaryFile(delete=False, suffix=file.filename) as tmp:
@@ -169,7 +589,7 @@ async def generate_moodboard(
     """
     try:
         import tempfile
-        from apps.api.neuro.moodboard_engine import MoodboardEngine
+        from neuro.moodboard_engine import MoodboardEngine
 
         engine = MoodboardEngine()
 
@@ -220,12 +640,12 @@ async def generate_brainsync_music(
             audio_path = tmp.name
 
         # Step 1: run HPS (personality scan)
-        from apps.api.neuro.hps_engine import HPSEngine
+        from neuro.hps_engine import HPSEngine
         hps = HPSEngine()
         profile = hps.scan(audio_path)
 
         # Step 2: generate brain-sync music
-        from apps.api.neuro.brainsync_engine import BrainSyncEngine
+        from neuro.brainsync_engine import BrainSyncEngine
         sync = BrainSyncEngine()
 
         output_path = sync.generate(mode, profile)
@@ -265,7 +685,7 @@ async def harmonic_personality_scan(file: UploadFile = File(...)):
             tmp.write(audio_bytes)
             audio_path = tmp.name
 
-        from apps.api.neuro.hps_engine import HPSEngine
+        from neuro.hps_engine import HPSEngine
         hps = HPSEngine()
         result = hps.scan(audio_path)
 
@@ -293,6 +713,7 @@ async def brain_sync(
     if not cog:
         raise HTTPException(status_code=503, detail="Cognitive engine not available")
     try:
+        import httpx
         # 1. SYNC WITH YOUTUBE VIDEO
         if youtube_video_id:
             # Fetch YouTube metadata
@@ -332,7 +753,7 @@ async def brain_sync(
             harmony = await cog.analyze_harmony(audio_path)
 
             # 2b. Real MIDI conversion
-            from apps.api.neuro.audio_to_midi import AudioToMidi
+            from neuro.audio_to_midi import AudioToMidi
             converter = AudioToMidi()
             midi_temp = tempfile.NamedTemporaryFile(delete=False, suffix=".mid")
             midi_path = midi_temp.name
@@ -493,8 +914,6 @@ import io
 
 from fastapi import APIRouter
 
-neural_router = APIRouter()
-
 @neural_router.get(
     "/neural-symphony",
     response_class=StreamingResponse,
@@ -552,9 +971,11 @@ from itertools import islice
 from glob import glob
 
 # FastAPI / ASGI
-from fastapi import FastAPI, UploadFile, File, Request, HTTPException
+from fastapi import (
+    FastAPI, UploadFile, File, Request, HTTPException
+)
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -571,7 +992,7 @@ except ImportError:
         _PYD = False
         class BaseSettings(object):
             pass
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 # System metrics
 try:
@@ -619,7 +1040,7 @@ import requests
 # ------------- Settings -------------
 class Settings(BaseSettings):
     api_title: str = "Clisonix Industrial Backend (REAL)"
-    api_version: str = "1.0.0"
+    api_version: str = "1.2.3"
     environment: str = os.getenv("ENVIRONMENT", "production")
     debug: bool = os.getenv("DEBUG", "false").lower() == "true"
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
@@ -659,7 +1080,7 @@ try:  # Core analytics engine (optional)
 except Exception:  # pragma: no cover - missing module is acceptable in minimal setups
     AlbiCore = None  # type: ignore
 
-ALBI_ENGINE = AlbiCore() if AlbiCore else None
+# ALBI_ENGINE initialized lazily above
 ALBA_COLLECTOR_TIMEOUT = float(os.getenv("ALBA_COLLECTOR_TIMEOUT", "2.5"))
 CLISONIX_RUNTIME = ROOT_DIR / "backend" / "system" / "runtime"
 CLISONIX_TRIGGER_FILE = CLISONIX_RUNTIME / "triggers.json"
@@ -860,17 +1281,9 @@ def error_response(
     ).dict(exclude_none=True)
     return JSONResponse(status_code=status_code, content=body)
 
-# ------------- App -------------
-
-app = FastAPI(
-    title="Clisonix Cloud API",
-    version=settings.api_version,
-    debug=settings.debug,
-)
-
 # Add Prometheus metrics middleware
 try:
-    from apps.api.metrics import MetricsMiddleware, get_metrics
+    from metrics import MetricsMiddleware, get_metrics
     app.add_middleware(MetricsMiddleware)
     
     @app.get("/metrics")
@@ -1095,17 +1508,18 @@ def derive_albi_insight(entries: List[Dict[str, Any]]) -> Optional[Dict[str, Any
             if denominator and (deviation / denominator) > 0.35:
                 anomalies.append(channel)
 
-    if ALBI_ENGINE and frames:
+    albi_engine = get_albi_engine()
+    if albi_engine and frames:
         try:
-            insight = ALBI_ENGINE.learn(frames)
+            insight = albi_engine.learn(frames)
             if insight.summary:
                 for channel_name, avg_val in insight.summary.items():
                     summary.setdefault(channel_name, {"avg": avg_val, "min": avg_val, "max": avg_val, "latest": avg_val})
                     summary[channel_name]["avg"] = avg_val
             if insight.anomalies:
                 anomalies = sorted(set(anomalies) | set(insight.anomalies))
-            if hasattr(ALBI_ENGINE, "_insights") and len(getattr(ALBI_ENGINE, "_insights", [])) > 50:
-                ALBI_ENGINE._insights = ALBI_ENGINE._insights[-50:]
+            if hasattr(albi_engine, "_insights") and len(getattr(albi_engine, "_insights", [])) > 50:
+                albi_engine._insights = albi_engine._insights[-50:]
         except Exception as exc:  # pragma: no cover - defensive
             logger.debug("AlbiCore insight failed: %s", exc)
 
@@ -1619,7 +2033,10 @@ def analyze_eeg_file(file_path: Path) -> Dict[str, Any]:
     }
 
 @app.post("/api/uploads/eeg/process")
-async def process_eeg(file: UploadFile = File(...)):
+async def process_eeg(
+    file: UploadFile = File(...),
+    current_user: Dict[str, Any] = Depends(get_current_user_from_api_key)
+):
     require(file.filename, "Missing filename", 400, error_code="MISSING_FILENAME")
     dest = Path(settings.storage_dir) / f"eeg_{int(time.time())}_{uuid.uuid4().hex[:6]}_{Path(file.filename).name}"
     try:
@@ -1682,7 +2099,10 @@ def analyze_audio_file(file_path: Path) -> Dict[str, Any]:
     }
 
 @app.post("/api/uploads/audio/process")
-async def process_audio(file: UploadFile = File(...)):
+async def process_audio(
+    file: UploadFile = File(...),
+    current_user: Dict[str, Any] = Depends(get_current_user_from_api_key)
+):
     require(file.filename, "Missing filename", 400, error_code="MISSING_FILENAME")
     dest = Path(settings.storage_dir) / f"audio_{int(time.time())}_{uuid.uuid4().hex[:6]}_{Path(file.filename).name}"
     try:
@@ -1738,7 +2158,10 @@ def paypal_token() -> str:
     response_model=Dict[str, Any],
     responses={501: {"model": ErrorEnvelope}, 502: {"model": ErrorEnvelope}},
 )
-def paypal_create_order(payload: PayPalCreateOrderRequest):
+def paypal_create_order(
+    payload: PayPalCreateOrderRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user_from_api_key)
+):
     """
     Create PayPal order (REAL sandbox/live depending on PAYPAL_BASE).
     Payload example:
@@ -1768,7 +2191,10 @@ def paypal_create_order(payload: PayPalCreateOrderRequest):
     response_model=Dict[str, Any],
     responses={501: {"model": ErrorEnvelope}, 502: {"model": ErrorEnvelope}},
 )
-def paypal_capture_order(order_id: str):
+def paypal_capture_order(
+    order_id: str,
+    current_user: Dict[str, Any] = Depends(get_current_user_from_api_key)
+):
     token = paypal_token()
     try:
         r = requests.post(
@@ -1791,7 +2217,10 @@ def require_stripe():
     response_model=Dict[str, Any],
     responses={501: {"model": ErrorEnvelope}, 502: {"model": ErrorEnvelope}},
 )
-def stripe_payment_intent(payload: StripePaymentIntentRequest):
+def stripe_payment_intent(
+    payload: StripePaymentIntentRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user_from_api_key)
+):
     """
     Create Stripe PaymentIntent (REAL).
     Payload example:
@@ -1870,9 +2299,8 @@ async def redis_ping():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
 # ------------- Brain Router (Cognitive Endpoints) -------------
-from fastapi import APIRouter
+
 from fastapi.responses import StreamingResponse
 import asyncio
 
@@ -1957,7 +2385,7 @@ app.include_router(brain_router)
 
 # Import and include Fitness Module routes
 try:
-    from apps.api.routes.fitness_routes import fitness_router
+    from routes.fitness_routes import fitness_router
     app.include_router(fitness_router)
     logger.info("Fitness training module routes loaded")
 except Exception as e:
@@ -1985,7 +2413,7 @@ except Exception as e:
 
 # Import and include ULTRA REPORTING routes
 try:
-    from apps.api.reporting_api import router as reporting_router
+    from reporting_api import router as reporting_router
     app.include_router(reporting_router)
     logger.info("[OK] ULTRA Reporting module routes loaded - Excel/PowerPoint/Dashboard generation")
 except Exception as e:
@@ -2399,7 +2827,7 @@ async def get_crypto_market():
 async def get_crypto_detailed(coin_id: str = "bitcoin"):
     """
     REAL CoinGecko API - Detailed crypto data
-    coin_id: bitcoin, ethereum, cardano, solana, polkadot, etc.
+    coin_id: "bitcoin", "ethereum", "cardano", "solana", "polkadot", etc.
     """
     try:
         # Validate coin_id (simple check)
@@ -2587,6 +3015,7 @@ async def get_realdata_dashboard():
             params={"name": "Tirana", "count": 1},
             timeout=5
         )
+        geo_r.raise_for_status()
         geo_data = geo_r.json()
         location = geo_data.get("results", [{}])[0]
         lat, lon = location.get("latitude", 41.33), location.get("longitude", 19.82)
@@ -2629,7 +3058,7 @@ async def analyze_neural_data(query: str):
     """
     openai_key = os.getenv("OPENAI_API_KEY")
     
-    if not openai_key or openai_key.startswith("sk-"):
+    if not openai_key or not openai_key.startswith("sk-"):
         return {
             "status": "demo",
             "message": "OpenAI API key not configured",
@@ -2707,7 +3136,7 @@ async def eeg_interpretation(
     """
     openai_key = os.getenv("OPENAI_API_KEY")
     
-    if not openai_key or openai_key.startswith("sk-"):
+    if not openai_key or not openai_key.startswith("sk-"):
         return {
             "status": "demo",
             "message": "OpenAI API key not configured - returning demo analysis",
@@ -2778,13 +3207,13 @@ async def ai_health():
     health_status = {
         "timestamp": utcnow(),
         "openai": {
-            "configured": bool(openai_key and not openai_key.startswith("sk-")),
+            "configured": bool(openai_key and openai_key.startswith("sk-")),
             "api_key_format": "valid" if openai_key and openai_key.startswith("sk-") else "demo/invalid"
         }
     }
     
     # Try to verify API key if configured
-    if openai_key and not openai_key.startswith("sk-"):
+    if openai_key and openai_key.startswith("sk-"):
         try:
             import openai
             openai.api_key = openai_key
@@ -2875,9 +3304,9 @@ def init_langchain_chains():
         return _langchain_chains
     
     try:
-        from langchain.llms import OpenAI
-        from langchain.memory import ConversationBufferMemory
-        from langchain.chains import ConversationChain
+        from langchain_openai import OpenAI  # type: ignore
+        from langchain.memory import ConversationBufferMemory  # type: ignore
+        from langchain.chains import ConversationChain  # type: ignore
         from dotenv import load_dotenv
         import os
         
@@ -2909,8 +3338,9 @@ def init_langchain_chains():
 @app.post("/api/ai/trinity-analysis")
 async def trinity_analysis(query: str = "", detailed: bool = False):
     """
-    🧠 CrewAI-powered ASI Trinity Analysis
-    Uses coordinated ALBA→ALBI→JONA agents for comprehensive neural analysis
+    CrewAI-powered ASI Trinity Analysis
+    Uses coordinated ALBA->ALBI->JONA agents for comprehensive neural
+    analysis
     
     Args:
         query: Analysis query or command
@@ -3161,7 +3591,7 @@ async def agents_status():
                     "endpoint": "/api/ai/quick-interpret"
                 }
             },
-            "openai_configured": bool(os.getenv("OPENAI_API_KEY") and not os.getenv("OPENAI_API_KEY").startswith("sk-")),
+            "openai_configured": bool(os.getenv("OPENAI_API_KEY") and os.getenv("OPENAI_API_KEY").startswith("sk-")),
             "anthropic_configured": bool(os.getenv("ANTHROPIC_API_KEY"))
         }
     except Exception as e:

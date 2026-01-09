@@ -27,56 +27,47 @@ export default function Home() {
         let jonaData: any = null
 
         try {
-          const asiStatusRes = await fetch(`${API_BASE || ''}/asi/status`)
+          const asiStatusRes = await fetch('/api/asi-status')
           if (asiStatusRes.ok) {
             const asiData = await asiStatusRes.json()
-            albiData = asiData.trinity?.albi
-            albaData = asiData.trinity?.alba
-            jonaData = asiData.trinity?.jona
+            albiData = asiData.asi_status?.trinity?.albi
+            albaData = asiData.asi_status?.trinity?.alba
+            jonaData = asiData.asi_status?.trinity?.jona
           }
         } catch (e) {
-          console.warn('Failed to fetch real ASI metrics from Prometheus:', e)
+          console.warn('Failed to fetch real ASI metrics from API route:', e)
         }
 
         // Fallback to system-status if ASI endpoints fail
         if (!albiData || !albaData || !jonaData) {
-          const endpoints = API_BASE
-            ? [`${API_BASE}/api/system-status`, '/api/system-status']
-            : ['/api/system-status']
+          try {
+            const systemResponse = await fetch('/api/system-status')
 
-          for (const target of endpoints) {
-            try {
-              const systemResponse = await fetch(target, {
-                headers: target.startsWith('/') ? { 'x-Clisonix-internal': '1' } : undefined,
+            if (systemResponse.ok) {
+              const systemData = await systemResponse.json()
+              const statusPayload = systemData.data || systemData
+
+              setSystemStatus({
+                signal_gen: {
+                  status: statusPayload.core_services === 'Operational' ? 'Online' : 'Degraded',
+                  version: '1.0.0'
+                },
+                albi: {
+                  status: statusPayload.network === 'Connected' ? 'online' : 'degraded',
+                  neural_patterns: 1247
+                },
+                alba: {
+                  status: statusPayload.maintenance === 'Scheduled' ? 'online' : 'degraded',
+                  data_streams: 8
+                },
+                jona: {
+                  status: statusPayload.data_integrity === 'Verified' ? 'online' : 'degraded',
+                  audio_synthesis: true
+                }
               })
-
-              if (systemResponse.ok) {
-                const systemData = await systemResponse.json()
-                const statusPayload = systemData.data || systemData
-
-                setSystemStatus({
-                  signal_gen: {
-                    status: statusPayload.core_services === 'Operational' ? 'Online' : 'Degraded',
-                    version: '1.0.0'
-                  },
-                  albi: {
-                    status: statusPayload.network === 'Connected' ? 'online' : 'degraded',
-                    neural_patterns: 1247
-                  },
-                  alba: {
-                    status: statusPayload.maintenance === 'Scheduled' ? 'online' : 'degraded',
-                    data_streams: 8
-                  },
-                  jona: {
-                    status: statusPayload.data_integrity === 'Verified' ? 'online' : 'degraded',
-                    audio_synthesis: true
-                  }
-                })
-                break
-              }
-            } catch (err) {
-              console.warn(`Failed to fetch from ${target}:`, err)
             }
+          } catch (err) {
+            console.warn('Failed to fetch from system-status API route:', err)
           }
         }
 
