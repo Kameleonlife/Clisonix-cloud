@@ -8,7 +8,7 @@ scrape_configs:
   # Clisonix Backend API
   - job_name: 'clisonix-api'
     static_configs:
-      - targets: ['localhost:8000']
+      - targets: ['api:8000']
     metrics_path: '/metrics'
     scrape_interval: 5s
     relabel_configs:
@@ -19,14 +19,14 @@ scrape_configs:
   # Clisonix Frontend (if exposing metrics)
   - job_name: 'clisonix-frontend'
     static_configs:
-      - targets: ['localhost:3000']
+      - targets: ['frontend:3000']
     metrics_path: '/metrics'
     scrape_interval: 10s
 
   # ALBA Network Monitoring
   - job_name: 'alba-network'
     static_configs:
-      - targets: ['localhost:8000']
+      - targets: ['api:8000']
     metrics_path: '/alba/metrics'
     scrape_interval: 10s
     relabel_configs:
@@ -37,7 +37,7 @@ scrape_configs:
   # ALBI EEG Analysis
   - job_name: 'albi-eeg'
     static_configs:
-      - targets: ['localhost:8000']
+      - targets: ['api:8000']
     metrics_path: '/albi/metrics'
     scrape_interval: 10s
     relabel_configs:
@@ -48,7 +48,7 @@ scrape_configs:
   # JONA Neural Synthesis
   - job_name: 'jona-synthesis'
     static_configs:
-      - targets: ['localhost:8000']
+      - targets: ['api:8000']
     metrics_path: '/jona/metrics'
     scrape_interval: 10s
     relabel_configs:
@@ -59,7 +59,7 @@ scrape_configs:
   # AI Agent Framework Metrics
   - job_name: 'ai-agents'
     static_configs:
-      - targets: ['localhost:8000']
+      - targets: ['api:8000']
     metrics_path: '/api/ai/metrics'
     scrape_interval: 5s
     relabel_configs:

@@ -1,6 +1,7 @@
 ﻿/**
  * ALBI - EEG Analysis Module
  * Neural Frequency Laboratory Director - EEG Processing & Brain Signal Analysis
+ * REAL DATA ONLY - No mock or simulated data
  */
 
 "use client"
@@ -8,95 +9,86 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 
-interface EEGData {
-  timestamp: string
-  dominant_frequency: number
-  brain_state: string
-  neural_symphony_ready: boolean
-  signal_strength: number
-  frequencies: number[]
-}
-
-interface AlbiStatus {
-  status: 'active' | 'processing' | 'learning' | 'offline'
-  neural_patterns_count: number
-  last_analysis: string
-  processing_queue: number
+interface AlbiMetrics {
+  success: boolean
+  service: string
+  role: string
+  data: {
+    operational: boolean
+    health: number
+    metrics: {
+      goroutines: number
+      neural_patterns: number
+      processing_efficiency: number
+      gc_operations: number
+    }
+    timestamp: string
+  }
 }
 
 export default function EEGAnalysisPage() {
-  const [eegData, setEegData] = useState<EEGData | null>(null)
-  const [albiStatus, setAlbiStatus] = useState<AlbiStatus>({
-    status: 'offline',
-    neural_patterns_count: 0,
-    last_analysis: 'Never',
-    processing_queue: 0
-  })
-  const [isAnalyzing, setIsAnalyzing] = useState(false)
+  const [albiMetrics, setAlbiMetrics] = useState<AlbiMetrics | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    // Simulate ALBI status monitoring
-    const checkAlbiStatus = async () => {
+    // Fetch REAL ALBI metrics from backend
+    const fetchAlbiMetrics = async () => {
       try {
-        // Will connect to actual ALBI backend
-        setAlbiStatus({
-          status: 'active',
-          neural_patterns_count: 1247,
-          last_analysis: new Date().toLocaleTimeString(),
-          processing_queue: 3
+        setLoading(true)
+        setError(null)
+        const response = await fetch('/api/albi/metrics', {
+          cache: 'no-store',
         })
-      } catch (error) {
-        console.error('ALBI status check failed:', error)
+
+        if (!response.ok) {
+          throw new Error(`Failed to fetch ALBI metrics: ${response.status}`)
+        }
+
+        const data = await response.json()
+        setAlbiMetrics(data)
+      } catch (err) {
+        console.error('ALBI metrics fetch error:', err)
+        setError(String(err))
+      } finally {
+        setLoading(false)
       }
     }
 
-    // Simulate EEG data stream
-    const streamEEGData = () => {
-      const mockData: EEGData = {
-        timestamp: new Date().toISOString(),
-        dominant_frequency: Math.random() * 40 + 1, // 1-40 Hz
-        brain_state: getBrainState(Math.random() * 40 + 1),
-        neural_symphony_ready: Math.random() > 0.3,
-        signal_strength: Math.random() * 100,
-        frequencies: Array.from({ length: 10 }, () => Math.random() * 100)
-      }
-      setEegData(mockData)
-    }
-
-    checkAlbiStatus()
-    streamEEGData()
-
-    const statusInterval = setInterval(checkAlbiStatus, 5000)
-    const dataInterval = setInterval(streamEEGData, 1000)
-
-    return () => {
-      clearInterval(statusInterval)
-      clearInterval(dataInterval)
-    }
+    fetchAlbiMetrics()
+    // Refresh every 5 seconds for real-time data
+    const interval = setInterval(fetchAlbiMetrics, 5000)
+    return () => clearInterval(interval)
   }, [])
 
-  const getBrainState = (frequency: number): string => {
-    if (frequency < 4) return 'Deep Sleep (Delta)'
-    if (frequency < 8) return 'Light Sleep (Theta)'
-    if (frequency < 13) return 'Relaxed (Alpha)'
-    if (frequency < 30) return 'Focused (Beta)'
-    return 'High Activity (Gamma)'
+  if (loading && !albiMetrics) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-center h-96">
+          <div className="text-center">
+            <div className="text-2xl text-cyan-400 mb-4">⏳ Loading REAL ALBI metrics...</div>
+            <div className="text-gray-400">Connecting to backend service</div>
+          </div>
+        </div>
+      </div>
+    )
   }
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'active': return 'text-green-400'
-      case 'processing': return 'text-yellow-400'
-      case 'learning': return 'text-blue-400'
-      default: return 'text-red-400'
-    }
+  if (error && !albiMetrics) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-center h-96">
+          <div className="text-center bg-red-500/10 rounded-lg p-8 border border-red-500/20">
+            <div className="text-2xl text-red-400 mb-4">❌ Connection Error</div>
+            <div className="text-gray-300">{error}</div>
+            <div className="text-sm text-gray-400 mt-4">Backend service unavailable</div>
+          </div>
+        </div>
+      </div>
+    )
   }
 
-  const startAnalysis = async () => {
-    setIsAnalyzing(true)
-    // Simulate analysis process
-    setTimeout(() => setIsAnalyzing(false), 3000)
-  }
+  const metrics = albiMetrics?.data.metrics
 
   return (
     <div className="space-y-6">
@@ -106,17 +98,17 @@ export default function EEGAnalysisPage() {
           <h1 className="text-3xl font-bold text-white mb-2 flex items-center">
             🧠 ALBI - EEG Analysis
           </h1>
-          <p className="text-gray-300">Neural Frequency Laboratory Director</p>
+          <p className="text-gray-300">{albiMetrics?.role}</p>
           <div className="text-sm text-gray-400 mt-1">
             Specialty: EEG Processing & Brain Signal Analysis
           </div>
         </div>
         <div className="text-right">
-          <div className={`text-lg font-semibold ${getStatusColor(albiStatus.status)}`}>
-            {albiStatus.status.toUpperCase()}
+          <div className={`text-lg font-semibold ${albiMetrics?.data.operational ? 'text-green-400' : 'text-red-400'}`}>
+            {albiMetrics?.data.operational ? 'OPERATIONAL' : 'OFFLINE'}
           </div>
           <div className="text-sm text-gray-400">
-            {albiStatus.neural_patterns_count} neural patterns learned
+            Health: {((albiMetrics?.data.health || 0) * 100).toFixed(1)}%
           </div>
         </div>
       </div>
@@ -132,106 +124,95 @@ export default function EEGAnalysisPage() {
 
       {/* Real-time EEG Data */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Live Brain State */}
+        {/* Primary Metrics */}
         <div className="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20">
           <h3 className="text-xl font-semibold text-white mb-4 flex items-center">
             <span className="w-3 h-3 bg-green-500 rounded-full mr-3 animate-pulse"></span>
-            Live Brain State
+            Live System Metrics
           </h3>
           
-          {eegData && (
-            <div className="space-y-4">
-              <div className="bg-black/30 rounded-lg p-4">
-                <div className="text-2xl font-bold text-cyan-400 mb-2">
-                  {eegData.brain_state}
-                </div>
-                <div className="text-gray-300">
-                  Dominant Frequency: <span className="text-white font-mono">{eegData.dominant_frequency.toFixed(2)} Hz</span>
-                </div>
-                <div className="text-gray-300">
-                  Signal Strength: <span className="text-white font-mono">{eegData.signal_strength.toFixed(1)}%</span>
-                </div>
+          <div className="space-y-4">
+            <div className="bg-black/30 rounded-lg p-4">
+              <div className="text-sm text-gray-400 mb-1">Neural Patterns Detected</div>
+              <div className="text-3xl font-bold text-cyan-400">
+                {metrics?.neural_patterns || 0}
               </div>
-
-              <div className="flex items-center justify-between">
-                <span className="text-gray-400">Neural Symphony Ready:</span>
-                <div className={`px-3 py-1 rounded-full text-xs font-medium ${
-                  eegData.neural_symphony_ready 
-                    ? 'bg-green-500/20 text-green-400 border border-green-500/30' 
-                    : 'bg-red-500/20 text-red-400 border border-red-500/30'
-                }`}>
-                  {eegData.neural_symphony_ready ? 'READY' : 'NOT READY'}
-                </div>
-              </div>
-
-              <div className="text-xs text-gray-500">
-                Last Update: {new Date(eegData.timestamp).toLocaleTimeString()}
-              </div>
+              <div className="text-xs text-gray-500 mt-2">Real-time pattern count from ALBI</div>
             </div>
-          )}
+
+            <div className="bg-black/30 rounded-lg p-4">
+              <div className="text-sm text-gray-400 mb-1">Active Goroutines</div>
+              <div className="text-3xl font-bold text-blue-400">
+                {metrics?.goroutines || 0}
+              </div>
+              <div className="text-xs text-gray-500 mt-2">Concurrent processing threads</div>
+            </div>
+          </div>
         </div>
 
-        {/* Frequency Spectrum */}
+        {/* Processing Stats */}
         <div className="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20">
           <h3 className="text-xl font-semibold text-white mb-4">
-            Frequency Spectrum (FFT)
+            Processing Efficiency
           </h3>
           
-          {eegData && (
-            <div className="space-y-3">
-              <div className="grid grid-cols-5 gap-2">
-                {eegData.frequencies.map((freq, idx) => (
-                  <div key={idx} className="text-center">
-                    <div 
-                      className="bg-gradient-to-t from-cyan-500 to-blue-500 rounded-sm mb-1"
-                      style={{ height: `${Math.max(freq, 5)}px` }}
-                    ></div>
-                    <div className="text-xs text-gray-400">{idx * 4}Hz</div>
-                  </div>
-                ))}
+          <div className="space-y-4">
+            <div className="bg-black/30 rounded-lg p-4">
+              <div className="text-sm text-gray-400 mb-1">Processing Efficiency</div>
+              <div className="text-3xl font-bold text-yellow-400">
+                {((metrics?.processing_efficiency || 0) * 100).toFixed(1)}%
               </div>
-              
-              <div className="text-xs text-gray-500 text-center mt-4">
-                Real-time FFT Analysis • 10 frequency bins • Updated every second
-              </div>
+              <div className="text-xs text-gray-500 mt-2">Current processing rate</div>
             </div>
-          )}
+
+            <div className="bg-black/30 rounded-lg p-4">
+              <div className="text-sm text-gray-400 mb-1">GC Operations</div>
+              <div className="text-3xl font-bold text-purple-400">
+                {metrics?.gc_operations || 0}
+              </div>
+              <div className="text-xs text-gray-500 mt-2">Memory garbage collection cycles</div>
+            </div>
+          </div>
         </div>
       </div>
 
       {/* ALBI Statistics */}
       <div className="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20">
         <h3 className="text-xl font-semibold text-white mb-4">
-          🤖 ALBI Performance Metrics
+          🤖 ALBI Performance Dashboard
         </h3>
         
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-black/30 rounded-lg p-4 text-center">
+          <div className="bg-black/30 rounded-lg p-4 text-center border-l-4 border-l-cyan-500">
             <div className="text-2xl font-bold text-cyan-400">
-              {albiStatus.neural_patterns_count}
+              {metrics?.neural_patterns || 0}
             </div>
-            <div className="text-sm text-gray-400">Neural Patterns</div>
+            <div className="text-sm text-gray-400 mt-2">Neural Patterns</div>
+            <div className="text-xs text-gray-500 mt-1">Learned & Detected</div>
           </div>
           
-          <div className="bg-black/30 rounded-lg p-4 text-center">
-            <div className="text-2xl font-bold text-yellow-400">
-              {albiStatus.processing_queue}
+          <div className="bg-black/30 rounded-lg p-4 text-center border-l-4 border-l-blue-500">
+            <div className="text-2xl font-bold text-blue-400">
+              {metrics?.goroutines || 0}
             </div>
-            <div className="text-sm text-gray-400">Processing Queue</div>
+            <div className="text-sm text-gray-400 mt-2">Active Goroutines</div>
+            <div className="text-xs text-gray-500 mt-1">Concurrent Threads</div>
           </div>
           
-          <div className="bg-black/30 rounded-lg p-4 text-center">
+          <div className="bg-black/30 rounded-lg p-4 text-center border-l-4 border-l-yellow-500">
+            <div className="text-lg font-bold text-yellow-400">
+              {((metrics?.processing_efficiency || 0) * 100).toFixed(1)}%
+            </div>
+            <div className="text-sm text-gray-400 mt-2">Efficiency</div>
+            <div className="text-xs text-gray-500 mt-1">Processing Rate</div>
+          </div>
+          
+          <div className="bg-black/30 rounded-lg p-4 text-center border-l-4 border-l-green-500">
             <div className="text-lg font-bold text-green-400">
-              {albiStatus.last_analysis}
+              {((albiMetrics?.data.health || 0) * 100).toFixed(1)}%
             </div>
-            <div className="text-sm text-gray-400">Last Analysis</div>
-          </div>
-          
-          <div className="bg-black/30 rounded-lg p-4 text-center">
-            <div className={`text-lg font-bold ${getStatusColor(albiStatus.status)}`}>
-              {albiStatus.status.toUpperCase()}
-            </div>
-            <div className="text-sm text-gray-400">System Status</div>
+            <div className="text-sm text-gray-400 mt-2">Health</div>
+            <div className="text-xs text-gray-500 mt-1">System Status</div>
           </div>
         </div>
       </div>
@@ -239,56 +220,47 @@ export default function EEGAnalysisPage() {
       {/* Controls */}
       <div className="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20">
         <h3 className="text-xl font-semibold text-white mb-4">
-          Neural Analysis Controls
+          System Information
         </h3>
         
-        <div className="flex flex-wrap gap-4">
-          <button
-            onClick={startAnalysis}
-            disabled={isAnalyzing}
-            className={`px-6 py-3 rounded-lg font-medium transition-all duration-300 ${
-              isAnalyzing
-                ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 cursor-not-allowed'
-                : 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 hover:bg-cyan-500/30 hover:border-cyan-400/50'
-            }`}
-          >
-            {isAnalyzing ? '🔄 Analyzing...' : '🧠 Start Deep Analysis'}
-          </button>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="bg-black/30 rounded-lg p-4">
+            <div className="text-sm text-gray-400 mb-2">Service</div>
+            <div className="text-lg text-white font-mono">{albiMetrics?.service || 'ALBI'}</div>
+          </div>
           
-          <button className="px-6 py-3 rounded-lg font-medium bg-purple-500/20 text-purple-400 border border-purple-500/30 hover:bg-purple-500/30 hover:border-purple-400/50 transition-all duration-300">
-            📊 Export Neural Data
-          </button>
+          <div className="bg-black/30 rounded-lg p-4">
+            <div className="text-sm text-gray-400 mb-2">Role</div>
+            <div className="text-lg text-white font-mono">{albiMetrics?.role || 'Neural Processor'}</div>
+          </div>
           
-          <button className="px-6 py-3 rounded-lg font-medium bg-green-500/20 text-green-400 border border-green-500/30 hover:bg-green-500/30 hover:border-green-400/50 transition-all duration-300">
-            🎵 Send to JONA (Audio Synthesis)
-          </button>
+          <div className="bg-black/30 rounded-lg p-4">
+            <div className="text-sm text-gray-400 mb-2">Last Update</div>
+            <div className="text-lg text-white font-mono">
+              {new Date(albiMetrics?.data.timestamp || '').toLocaleTimeString()}
+            </div>
+          </div>
+          
+          <div className="bg-black/30 rounded-lg p-4">
+            <div className="text-sm text-gray-400 mb-2">Status</div>
+            <div className={`text-lg font-mono ${albiMetrics?.data.operational ? 'text-green-400' : 'text-red-400'}`}>
+              {albiMetrics?.data.operational ? '✓ ONLINE' : '✗ OFFLINE'}
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Recent Neural Patterns */}
-      <div className="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20">
-        <h3 className="text-xl font-semibold text-white mb-4">
-          Recently Detected Neural Patterns
-        </h3>
-        
-        <div className="space-y-3">
-          {[
-            { type: 'Alpha Wave Burst', frequency: '10.2 Hz', confidence: 94, time: '2 min ago' },
-            { type: 'Theta Pattern', frequency: '6.8 Hz', confidence: 87, time: '5 min ago' },
-            { type: 'Beta Spike', frequency: '18.5 Hz', confidence: 92, time: '7 min ago' },
-            { type: 'Gamma Activity', frequency: '35.1 Hz', confidence: 78, time: '12 min ago' },
-          ].map((pattern, idx) => (
-            <div key={idx} className="flex items-center justify-between bg-black/30 rounded-lg p-3">
-              <div>
-                <div className="text-white font-medium">{pattern.type}</div>
-                <div className="text-sm text-gray-400">{pattern.frequency} • {pattern.time}</div>
-              </div>
-              <div className="text-right">
-                <div className="text-cyan-400 font-mono">{pattern.confidence}%</div>
-                <div className="text-xs text-gray-500">Confidence</div>
-              </div>
-            </div>
-          ))}
+      {/* Data Source Notice */}
+      <div className="bg-cyan-500/10 rounded-xl p-4 border border-cyan-500/20">
+        <div className="flex items-start space-x-3">
+          <div className="text-2xl">📡</div>
+          <div>
+            <h4 className="text-cyan-400 font-semibold">Real-Time Data Feed</h4>
+            <p className="text-sm text-gray-300 mt-1">
+              All data displayed is REAL and fetched live from the Prometheus-backed ALBI service running on the backend. 
+              This page updates every 5 seconds with actual system metrics - no simulated or mock data.
+            </p>
+          </div>
         </div>
       </div>
     </div>
