@@ -30,7 +30,15 @@ import numpy as np
 
 # FastAPI & Starlette
 from fastapi import (
-    FastAPI, UploadFile, File, Request, HTTPException, APIRouter, Form, Depends, Header
+    FastAPI,
+    UploadFile,
+    File,
+    Request,
+    HTTPException,
+    APIRouter,
+    Form,
+    Depends,
+    Header,
 )
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -49,12 +57,14 @@ except ImportError:
 # Optional Core Libraries (graceful degradation)
 try:
     import psutil  # type: ignore
+
     _PSUTIL = True
 except ImportError:
     _PSUTIL = False
 
 try:
     import redis.asyncio as aioredis
+
     _REDIS = True
 except ImportError:
     _REDIS = False
@@ -62,6 +72,7 @@ except ImportError:
 
 try:
     import asyncpg
+
     _PG = True
 except ImportError:
     _PG = False
@@ -70,6 +81,7 @@ except ImportError:
 try:
     import mne
     from scipy.signal import welch
+
     _EEG = True
 except ImportError:
     _EEG = False
@@ -77,6 +89,7 @@ except ImportError:
 try:
     import librosa
     import soundfile as sf
+
     _AUDIO = True
 except ImportError:
     _AUDIO = False
@@ -98,6 +111,7 @@ from metrics import MetricsMiddleware, get_metrics
 # Curiosity Ocean - Groq + Hybrid Biometric Integration
 try:
     import ocean_routes
+
     ocean_router = ocean_routes.router
     _OCEAN_AVAILABLE = True
 except (ImportError, AttributeError) as e:
@@ -111,10 +125,12 @@ import secrets
 import hashlib
 from collections import defaultdict
 
+
 # API Key System Models
 class UserCreate(BaseModel):
     email: str
     plan: str = "free"
+
 
 class UserResponse(BaseModel):
     id: str
@@ -122,9 +138,11 @@ class UserResponse(BaseModel):
     plan: str
     created_at: datetime
 
+
 class APIKeyCreateResponse(BaseModel):
     id: str
     api_key: str
+
 
 class APIKeyItem(BaseModel):
     id: str
@@ -133,42 +151,52 @@ class APIKeyItem(BaseModel):
     created_at: datetime
     last_used_at: Optional[datetime]
 
+
 class APIKeyRevokeRequest(BaseModel):
     key_id: str
+
 
 # In-memory storage for demo (replace with database in production)
 users_db: Dict[str, Dict[str, Any]] = {}
 api_keys_db: Dict[str, Dict[str, Any]] = {}
-api_usage_db: Dict[str, Dict[str, int]] = defaultdict(dict)  # key_id -> {window: count}
+api_usage_db: Dict[str, Dict[str, int]] = defaultdict(
+    dict
+)  # key_id -> {window: count}
 
 # API Key Security Functions
 API_KEY_PREFIX = "CLI_live_"
+
 
 def generate_api_key() -> str:
     """Generate a secure API key"""
     raw = secrets.token_urlsafe(32)
     return f"{API_KEY_PREFIX}{raw}"
 
+
 def hash_api_key(api_key: str) -> str:
     """Hash API key for storage"""
     return hashlib.sha256(api_key.encode()).hexdigest()
+
 
 def verify_api_key(api_key: str, key_hash: str) -> bool:
     """Verify API key against hash"""
     return hash_api_key(api_key) == key_hash
 
+
 def extract_prefix(api_key: str) -> str:
     """Extract prefix for indexing"""
     return api_key[:20] if len(api_key) > 20 else api_key
+
 
 def get_rate_limit(plan: str) -> Dict[str, int]:
     """Get rate limits based on plan"""
     limits = {
         "free": {"daily": 100, "per_second": 1},
         "pro": {"daily": 10000, "per_second": 10},
-        "enterprise": {"daily": 100000, "per_second": 100}
+        "enterprise": {"daily": 100000, "per_second": 100},
     }
     return limits.get(plan, limits["free"])
+
 
 def check_rate_limit(key_id: str, plan: str) -> bool:
     """Check if request is within rate limits"""
@@ -195,22 +223,33 @@ def check_rate_limit(key_id: str, plan: str) -> bool:
 
     return True
 
-async def get_current_user_from_api_key(authorization: Optional[str] = Header(None, alias="Authorization")) -> Dict[str, Any]:
+
+async def get_current_user_from_api_key(
+    authorization: Optional[str] = Header(None, alias="Authorization")
+) -> Dict[str, Any]:
     """Extract and validate API key from Authorization header"""
     if not authorization:
-        raise HTTPException(status_code=401, detail="Authorization header missing")
+        raise HTTPException(
+            status_code=401, detail="Authorization header missing"
+        )
 
     if not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Invalid authorization format")
+        raise HTTPException(
+            status_code=401, detail="Invalid authorization format"
+        )
 
     api_key = authorization[7:]  # Remove "Bearer " prefix
     prefix = extract_prefix(api_key)
 
     # Find API key in database
     for key_id, key_data in api_keys_db.items():
-        if key_data["prefix"] == prefix and verify_api_key(api_key, key_data["hash"]):
+        if key_data["prefix"] == prefix and verify_api_key(
+            api_key, key_data["hash"]
+        ):
             if key_data["status"] != "active":
-                raise HTTPException(status_code=401, detail="API key is inactive")
+                raise HTTPException(
+                    status_code=401, detail="API key is inactive"
+                )
 
             # Check rate limits
             user_id = key_data["user_id"]
@@ -219,7 +258,9 @@ async def get_current_user_from_api_key(authorization: Optional[str] = Header(No
                 raise HTTPException(status_code=401, detail="User not found")
 
             if not check_rate_limit(key_id, user["plan"]):
-                raise HTTPException(status_code=429, detail="Rate limit exceeded")
+                raise HTTPException(
+                    status_code=429, detail="Rate limit exceeded"
+                )
 
             # Update last used
             key_data["last_used_at"] = datetime.now(timezone.utc)
@@ -228,40 +269,48 @@ async def get_current_user_from_api_key(authorization: Optional[str] = Header(No
                 "user_id": user_id,
                 "key_id": key_id,
                 "plan": user["plan"],
-                "email": user["email"]
+                "email": user["email"],
             }
 
     raise HTTPException(status_code=401, detail="Invalid API key")
 
+
 # --- Initial Setup & Configuration ---
+
 
 # Settings
 # pylint: disable=too-few-public-methods
 class Settings(BaseSettings):
     """Application configuration settings."""
+
     api_title: str = "Clisonix Industrial Backend (REAL)"
     api_version: str = "1.2.3"
     environment: str = os.getenv("ENVIRONMENT", "production")
     debug: bool = os.getenv("DEBUG", "false").lower() == "true"
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
     storage_dir: str = os.getenv("STORAGE_DIR", "./storage")
-    alba_collector_url: str = os.getenv("ALBA_COLLECTOR_URL", "http://127.0.0.1:8010")
+    alba_collector_url: str = os.getenv(
+        "ALBA_COLLECTOR_URL", "http://127.0.0.1:8010"
+    )
     mesh_hq_url: str = os.getenv("MESH_HQ_URL", "http://127.0.0.1:7777")
     redis_url: Optional[str] = os.getenv("REDIS_URL")
     database_url: Optional[str] = os.getenv("DATABASE_URL")
     paypal_client_id: Optional[str] = os.getenv("PAYPAL_CLIENT_ID")
     paypal_secret: Optional[str] = os.getenv("PAYPAL_SECRET")
-    paypal_base: str = os.getenv("PAYPAL_BASE", "https://api-m.sandbox.paypal.com")
+    paypal_base: str = os.getenv(
+        "PAYPAL_BASE", "https://api-m.sandbox.paypal.com"
+    )
     stripe_api_key: Optional[str] = os.getenv("STRIPE_API_KEY")
     stripe_base: str = "https://api.stripe.com/v1"
 
     class Config:
         case_sensitive = True
 
+
 settings = Settings()
 
 # Extend module search path
-ROOT_DIR = Path(__file__).resolve().parents[2] # Assuming apps/api/main.py
+ROOT_DIR = Path(__file__).resolve().parents[2]  # Assuming apps/api/main.py
 if str(ROOT_DIR) not in sys.path:
     sys.path.append(str(ROOT_DIR))
 
@@ -274,6 +323,7 @@ MESH_DIR = ROOT_DIR / "backend" / "mesh"
 MESH_STATUS_FILE = MESH_DIR / "nodes_status.json"
 MESH_LOG_DIR = ROOT_DIR / "logs"
 
+
 # Logging
 def setup_logging():
     Path("logs").mkdir(exist_ok=True)
@@ -283,12 +333,14 @@ def setup_logging():
         format=fmt,
         handlers=[
             logging.StreamHandler(sys.stdout),
-            logging.FileHandler("logs/Clisonix_real.log", encoding="utf-8")
+            logging.FileHandler("logs/Clisonix_real.log", encoding="utf-8"),
         ],
     )
     return logging.getLogger("Clisonix_real")
 
+
 logger = setup_logging()
+
 
 def get_albi_engine():
     """Lazy initialization of ALBI_ENGINE to avoid startup issues"""
@@ -300,6 +352,7 @@ def get_albi_engine():
             logger.warning(f"Failed to initialize AlbiCore: {e}")
             ALBI_ENGINE = None
     return ALBI_ENGINE
+
 
 # --- FastAPI Application Initialization ---
 app = FastAPI(
@@ -322,33 +375,52 @@ app.add_middleware(MetricsMiddleware)
 
 # --- Schemas (Pydantic Models) ---
 
+
 class ErrorEnvelope(BaseModel):
-    error: str = ''
-    message: str = ''
-    timestamp: str = ''
-    instance: str = ''
-    correlation_id: str = ''
+    error: str = ""
+    message: str = ""
+    timestamp: str = ""
+    instance: str = ""
+    correlation_id: str = ""
     path: Optional[str] = None
     details: Optional[Any] = None
+
 
 # ... (add other schemas here if they are used globally)
 
 
 # --- Utility Functions ---
 
-def require(cond: bool, msg: str, code: int = 503, *, error_code: Optional[str] = None):
+
+def require(
+    cond: bool, msg: str, code: int = 503, *, error_code: Optional[str] = None
+):
     if not cond:
-        detail: Any = {"code": error_code, "message": msg} if error_code else msg
+        detail: Any = (
+            {"code": error_code, "message": msg} if error_code else msg
+        )
         raise HTTPException(status_code=code, detail=detail)
+
 
 def utcnow() -> str:
     return datetime.utcnow().replace(tzinfo=timezone.utc).isoformat()
 
+
 def _get_correlation_id(request: Request) -> str:
-    return getattr(request.state, "correlation_id", f"REQ-{int(time.time())}-{uuid.uuid4().hex[:6]}")
+    return getattr(
+        request.state,
+        "correlation_id",
+        f"REQ-{int(time.time())}-{uuid.uuid4().hex[:6]}",
+    )
+
 
 def error_response(
-    request: Request, status_code: int, code: str, message: str, *, details: Optional[Any] = None
+    request: Request,
+    status_code: int,
+    code: str,
+    message: str,
+    *,
+    details: Optional[Any] = None,
 ) -> JSONResponse:
     cid = _get_correlation_id(request)
     body = ErrorEnvelope(
@@ -362,17 +434,23 @@ def error_response(
     ).dict(exclude_none=True)
     return JSONResponse(status_code=status_code, content=body)
 
+
 def _format_duration(seconds: float) -> str:
     total_seconds = max(int(seconds), 0)
     minutes, sec = divmod(total_seconds, 60)
     hours, minutes = divmod(minutes, 60)
     days, hours = divmod(hours, 24)
     parts: List[str] = []
-    if days: parts.append(f"{days}d")
-    if hours: parts.append(f"{hours}h")
-    if minutes: parts.append(f"{minutes}m")
-    if not parts: parts.append(f"{sec}s")
+    if days:
+        parts.append(f"{days}d")
+    if hours:
+        parts.append(f"{hours}h")
+    if minutes:
+        parts.append(f"{minutes}m")
+    if not parts:
+        parts.append(f"{sec}s")
     return " ".join(parts[:3])
+
 
 def _load_json(path: Path) -> Optional[Any]:
     if not path.exists():
@@ -392,6 +470,7 @@ industrial_router = APIRouter(prefix="/industrial", tags=["industrial"])
 
 # --- API Key Authentication Endpoints ---
 
+
 @app.post("/auth/users", response_model=UserResponse, tags=["Authentication"])
 async def create_user(user: UserCreate):
     """Create a new user account"""
@@ -400,11 +479,16 @@ async def create_user(user: UserCreate):
         "id": user_id,
         "email": user.email,
         "plan": user.plan,
-        "created_at": datetime.now(timezone.utc)
+        "created_at": datetime.now(timezone.utc),
     }
     return UserResponse(**users_db[user_id])
 
-@app.post("/auth/api-keys", response_model=APIKeyCreateResponse, tags=["Authentication"])
+
+@app.post(
+    "/auth/api-keys",
+    response_model=APIKeyCreateResponse,
+    tags=["Authentication"],
+)
 async def create_api_key(user: UserCreate):
     """Create a new API key for a user"""
     # First create or find user
@@ -420,7 +504,7 @@ async def create_api_key(user: UserCreate):
             "id": user_id,
             "email": user.email,
             "plan": user.plan,
-            "created_at": datetime.now(timezone.utc)
+            "created_at": datetime.now(timezone.utc),
         }
 
     # Generate API key
@@ -435,40 +519,55 @@ async def create_api_key(user: UserCreate):
         "hash": hash_api_key(api_key),
         "status": "active",
         "created_at": datetime.now(timezone.utc),
-        "last_used_at": None
+        "last_used_at": None,
     }
 
     return APIKeyCreateResponse(id=key_id, api_key=api_key)
 
-@app.get("/auth/api-keys", response_model=List[APIKeyItem], tags=["Authentication"])
-async def list_api_keys(current_user: Dict[str, Any] = Depends(get_current_user_from_api_key)):
+
+@app.get(
+    "/auth/api-keys", response_model=List[APIKeyItem], tags=["Authentication"]
+)
+async def list_api_keys(
+    current_user: Dict[str, Any] = Depends(get_current_user_from_api_key),
+):
     """List all API keys for the authenticated user"""
     user_keys = []
     for key_id, key_data in api_keys_db.items():
         if key_data["user_id"] == current_user["user_id"]:
-            user_keys.append(APIKeyItem(
-                id=key_data["id"],
-                prefix=key_data["prefix"],
-                status=key_data["status"],
-                created_at=key_data["created_at"],
-                last_used_at=key_data["last_used_at"]
-            ))
+            user_keys.append(
+                APIKeyItem(
+                    id=key_data["id"],
+                    prefix=key_data["prefix"],
+                    status=key_data["status"],
+                    created_at=key_data["created_at"],
+                    last_used_at=key_data["last_used_at"],
+                )
+            )
     return user_keys
 
+
 @app.delete("/auth/api-keys/{key_id}", tags=["Authentication"])
-async def revoke_api_key(key_id: str, current_user: Dict[str, Any] = Depends(get_current_user_from_api_key)):
+async def revoke_api_key(
+    key_id: str,
+    current_user: Dict[str, Any] = Depends(get_current_user_from_api_key),
+):
     """Revoke an API key"""
     if key_id not in api_keys_db:
         raise HTTPException(status_code=404, detail="API key not found")
 
     key_data = api_keys_db[key_id]
     if key_data["user_id"] != current_user["user_id"]:
-        raise HTTPException(status_code=403, detail="Not authorized to revoke this key")
+        raise HTTPException(
+            status_code=403, detail="Not authorized to revoke this key"
+        )
 
     key_data["status"] = "revoked"
     return {"message": "API key revoked successfully"}
 
+
 # --- API Endpoints ---
+
 
 # Health Endpoint
 @app.get("/health", tags=["System"])
@@ -483,14 +582,18 @@ async def health_check():
         "uptime_app_seconds": time.time() - START_TIME,
     }
 
+
 # Metrics Endpoint
 @app.get("/metrics", tags=["System"])
 async def metrics():
     """Prometheus metrics endpoint"""
-    return Response(content=get_metrics(), media_type="text/plain; version=0.0.4")
+    return Response(
+        content=get_metrics(), media_type="text/plain; version=0.0.4"
+    )
 
 
 # --- Brain Router Endpoints ---
+
 
 @brain_router.get("/youtube/insight")
 async def youtube_insight(video_id: str):
@@ -521,7 +624,7 @@ async def youtube_insight(video_id: str):
             params = {
                 "id": video_id,
                 "part": "snippet,statistics,contentDetails",
-                "key": os.getenv("YOUTUBE_API_KEY")
+                "key": os.getenv("YOUTUBE_API_KEY"),
             }
             data = await _get_json(client, url, params)
 
@@ -534,15 +637,13 @@ async def youtube_insight(video_id: str):
         # Pass metadata to insight engine
         result = engine.analyze(meta)
 
-        return {
-            "ok": True,
-            "video_id": video_id,
-            "insight": result
-        }
+        return {"ok": True, "video_id": video_id, "insight": result}
 
     except Exception as e:
         logger.error(f"[YT_INSIGHT_ERROR] {e}")
         raise HTTPException(status_code=500, detail="youtube_insight_failed")
+
+
 # --- Daily Energy Check Endpoint ---
 @brain_router.post("/energy/check")
 async def daily_energy_check(file: UploadFile = File(...)):
@@ -560,7 +661,9 @@ async def daily_energy_check(file: UploadFile = File(...)):
         from neuro.energy_engine import EnergyEngine
 
         # Save audio sample
-        with tempfile.NamedTemporaryFile(delete=False, suffix=file.filename) as tmp:
+        with tempfile.NamedTemporaryFile(
+            delete=False, suffix=file.filename
+        ) as tmp:
             blob = await file.read()
             tmp.write(blob)
             audio_path = tmp.name
@@ -568,20 +671,19 @@ async def daily_energy_check(file: UploadFile = File(...)):
         engine = EnergyEngine()
         result = engine.analyze(audio_path)
 
-        return {
-            "ok": True,
-            "energy": result
-        }
+        return {"ok": True, "energy": result}
 
     except Exception as e:
         logger.error(f"[ENERGY CHECK ERROR] {e}")
         raise HTTPException(status_code=500, detail="energy_check_failed")
+
+
 # --- Neural Moodboard Endpoint ---
 @brain_router.post("/moodboard/generate")
 async def generate_moodboard(
     text: Optional[str] = None,
     mood: Optional[str] = None,
-    file: Optional[UploadFile] = None
+    file: Optional[UploadFile] = None,
 ):
     """
     NEURAL MOODBOARD
@@ -607,33 +709,28 @@ async def generate_moodboard(
         # Handle file if present
         file_path = None
         if file:
-            with tempfile.NamedTemporaryFile(delete=False, suffix=file.filename) as tmp:
+            with tempfile.NamedTemporaryFile(
+                delete=False, suffix=file.filename
+            ) as tmp:
                 content = await file.read()
                 tmp.write(content)
                 file_path = tmp.name
 
-        result = engine.generate(
-            text=text,
-            mood=mood,
-            file_path=file_path
-        )
+        result = engine.generate(text=text, mood=mood, file_path=file_path)
 
-        return {
-            "ok": True,
-            "moodboard": result
-        }
+        return {"ok": True, "moodboard": result}
 
     except Exception as e:
         logger.error(f"[MOODBOARD ERROR] {e}")
         raise HTTPException(status_code=500, detail="moodboard_failed")
+
+
 # --- Personal Brain-Sync Music Endpoint ---
 from fastapi.responses import StreamingResponse
 
+
 @brain_router.post("/music/brainsync")
-async def generate_brainsync_music(
-    mode: str,
-    file: UploadFile = File(...)
-):
+async def generate_brainsync_music(mode: str, file: UploadFile = File(...)):
     """
     PERSONAL BRAIN-SYNC MUSIC
     Modes:
@@ -645,18 +742,22 @@ async def generate_brainsync_music(
         import tempfile
 
         # Save audio
-        with tempfile.NamedTemporaryFile(delete=False, suffix=file.filename) as tmp:
+        with tempfile.NamedTemporaryFile(
+            delete=False, suffix=file.filename
+        ) as tmp:
             audio_bytes = await file.read()
             tmp.write(audio_bytes)
             audio_path = tmp.name
 
         # Step 1: run HPS (personality scan)
         from neuro.hps_engine import HPSEngine
+
         hps = HPSEngine()
         profile = hps.scan(audio_path)
 
         # Step 2: generate brain-sync music
         from neuro.brainsync_engine import BrainSyncEngine
+
         sync = BrainSyncEngine()
 
         output_path = sync.generate(mode, profile)
@@ -669,12 +770,15 @@ async def generate_brainsync_music(
         return StreamingResponse(
             stream(),
             media_type="audio/wav",
-            headers={"Content-Disposition": "attachment; filename=brainsync.wav"}
+            headers={
+                "Content-Disposition": "attachment; filename=brainsync.wav"
+            },
         )
 
     except Exception as e:
         logger.error(f"[BRAINSYNC ERROR] {e}")
         raise HTTPException(status_code=500, detail="brainsync_failed")
+
 
 # --- Harmonic Personality Scan Endpoint ---
 @brain_router.post("/scan/harmonic")
@@ -690,30 +794,36 @@ async def harmonic_personality_scan(file: UploadFile = File(...)):
     """
     try:
         import tempfile
+
         # Save temp audio
-        with tempfile.NamedTemporaryFile(delete=False, suffix=file.filename) as tmp:
+        with tempfile.NamedTemporaryFile(
+            delete=False, suffix=file.filename
+        ) as tmp:
             audio_bytes = await file.read()
             tmp.write(audio_bytes)
             audio_path = tmp.name
 
         from neuro.hps_engine import HPSEngine
+
         hps = HPSEngine()
         result = hps.scan(audio_path)
 
         return {
             "ok": True,
             "type": "harmonic_personality_scan",
-            "result": result
+            "result": result,
         }
 
     except Exception as e:
         logger.error(f"[HPS ERROR] {e}")
         raise HTTPException(status_code=500, detail="hps_failed")
+
+
 # --- Brain Sync Endpoint (YouTube & Audio Integration) ---
 @brain_router.post("/sync")
 async def brain_sync(
     youtube_video_id: Optional[str] = Form(None),
-    file: Optional[UploadFile] = File(None)
+    file: Optional[UploadFile] = File(None),
 ):
     """
     Full NEURAL–HARMONIC SYNCHRONIZATION ENGINE.
@@ -722,9 +832,12 @@ async def brain_sync(
     - Audio file (analyzes harmony, converts to MIDI, syncs pipelines)
     """
     if not cog:
-        raise HTTPException(status_code=503, detail="Cognitive engine not available")
+        raise HTTPException(
+            status_code=503, detail="Cognitive engine not available"
+        )
     try:
         import httpx
+
         # 1. SYNC WITH YOUTUBE VIDEO
         if youtube_video_id:
             # Fetch YouTube metadata
@@ -733,13 +846,15 @@ async def brain_sync(
                 params = {
                     "part": "snippet,contentDetails,statistics",
                     "id": youtube_video_id,
-                    "key": os.getenv("YOUTUBE_API_KEY")
+                    "key": os.getenv("YOUTUBE_API_KEY"),
                 }
                 resp = await client.get(url_summary, params=params)
                 yt_data = resp.json()
                 items = yt_data.get("items") or []
                 if not items:
-                    raise HTTPException(status_code=404, detail="video_not_found")
+                    raise HTTPException(
+                        status_code=404, detail="video_not_found"
+                    )
                 video = items[0]
                 snippet = video.get("snippet", {})
             return {
@@ -749,13 +864,16 @@ async def brain_sync(
                 "title": snippet.get("title"),
                 "description": snippet.get("description"),
                 "published_at": snippet.get("publishedAt"),
-                "note": "Metadata synced. Audio must be uploaded to complete harmony+MIDI sync."
+                "note": "Metadata synced. Audio must be uploaded to complete harmony+MIDI sync.",
             }
 
         # 2. SYNC WITH AUDIO FILE
         if file:
             import tempfile
-            with tempfile.NamedTemporaryFile(delete=False, suffix=file.filename) as tmp:
+
+            with tempfile.NamedTemporaryFile(
+                delete=False, suffix=file.filename
+            ) as tmp:
                 audio_bytes = await file.read()
                 tmp.write(audio_bytes)
                 audio_path = tmp.name
@@ -765,8 +883,11 @@ async def brain_sync(
 
             # 2b. Real MIDI conversion
             from neuro.audio_to_midi import AudioToMidi
+
             converter = AudioToMidi()
-            midi_temp = tempfile.NamedTemporaryFile(delete=False, suffix=".mid")
+            midi_temp = tempfile.NamedTemporaryFile(
+                delete=False, suffix=".mid"
+            )
             midi_path = midi_temp.name
             midi_temp.close()
             midi_output = converter.convert(audio_path, midi_path)
@@ -781,7 +902,7 @@ async def brain_sync(
                 "harmony": harmony,
                 "neural_load": neural_load,
                 "pipelines": pipelines,
-                "midi_file_path": midi_output
+                "midi_file_path": midi_output,
             }
 
         # If nothing provided
@@ -790,6 +911,8 @@ async def brain_sync(
     except Exception as e:
         logger.error(f"[SYNC ERROR] {e}")
         raise HTTPException(status_code=500, detail="sync_engine_failed")
+
+
 # --- Brain Harmony Endpoint ---
 @brain_router.post("/harmony")
 async def analyze_harmony(file: UploadFile = File(...)):
@@ -804,10 +927,14 @@ async def analyze_harmony(file: UploadFile = File(...)):
     - Alpha/Harmonic Index
     """
     if not cog:
-        raise HTTPException(status_code=503, detail="Cognitive engine not available")
+        raise HTTPException(
+            status_code=503, detail="Cognitive engine not available"
+        )
     try:
         # Save temp audio
-        with tempfile.NamedTemporaryFile(delete=False, suffix=file.filename) as temp_file:
+        with tempfile.NamedTemporaryFile(
+            delete=False, suffix=file.filename
+        ) as temp_file:
             audio_bytes = await file.read()
             temp_file.write(audio_bytes)
             audio_path = temp_file.name
@@ -818,12 +945,14 @@ async def analyze_harmony(file: UploadFile = File(...)):
         return {
             "ok": True,
             "harmony_profile": harmony,
-            "timestamp": time.time()
+            "timestamp": time.time(),
         }
 
     except Exception as e:
         logger.error(f"[HARMONY ERROR] {e}")
         raise HTTPException(status_code=500, detail="harmony_analysis_failed")
+
+
 # --- Brain API – Pjesa 2: Industrial Endpoints ---
 @brain_router.get("/cortex-map")
 async def get_cortex_map():
@@ -835,17 +964,16 @@ async def get_cortex_map():
     - Active signals
     """
     if not cog:
-        raise HTTPException(status_code=503, detail="Cognitive engine not available")
+        raise HTTPException(
+            status_code=503, detail="Cognitive engine not available"
+        )
     try:
         cortex = await cog.get_cortex_map()
-        return {
-            "ok": True,
-            "cortex_map": cortex,
-            "timestamp": time.time()
-        }
+        return {"ok": True, "cortex_map": cortex, "timestamp": time.time()}
     except Exception as e:
         logger.error(f"[CORTEX MAP ERROR] {e}")
         raise HTTPException(status_code=500, detail="internal_cortex_error")
+
 
 @brain_router.get("/temperature")
 async def get_brain_temperatures():
@@ -853,17 +981,18 @@ async def get_brain_temperatures():
     Returns per-module thermal stress and CPU temperature (if supported).
     """
     if not cog:
-        raise HTTPException(status_code=503, detail="Cognitive engine not available")
+        raise HTTPException(
+            status_code=503, detail="Cognitive engine not available"
+        )
     try:
         temps = await cog.get_module_temperatures()
-        return {
-            "ok": True,
-            "temperature": temps,
-            "timestamp": time.time()
-        }
+        return {"ok": True, "temperature": temps, "timestamp": time.time()}
     except Exception as e:
         logger.error(f"[TEMP ERROR] {e}")
-        raise HTTPException(status_code=500, detail="internal_temperature_error")
+        raise HTTPException(
+            status_code=500, detail="internal_temperature_error"
+        )
+
 
 @brain_router.get("/queue")
 async def get_queue_status():
@@ -871,17 +1000,16 @@ async def get_queue_status():
     Returns queue metrics for ingestion, processing, synthesis.
     """
     if not cog:
-        raise HTTPException(status_code=503, detail="Cognitive engine not available")
+        raise HTTPException(
+            status_code=503, detail="Cognitive engine not available"
+        )
     try:
         q = await cog.get_queue_status()
-        return {
-            "ok": True,
-            "queues": q,
-            "timestamp": time.time()
-        }
+        return {"ok": True, "queues": q, "timestamp": time.time()}
     except Exception as e:
         logger.error(f"[QUEUE ERROR] {e}")
         raise HTTPException(status_code=500, detail="internal_queue_error")
+
 
 @brain_router.get("/threads")
 async def get_thread_info():
@@ -889,17 +1017,16 @@ async def get_thread_info():
     Returns threads, CPU usage, and active processing routines.
     """
     if not cog:
-        raise HTTPException(status_code=503, detail="Cognitive engine not available")
+        raise HTTPException(
+            status_code=503, detail="Cognitive engine not available"
+        )
     try:
         t = await cog.get_thread_status()
-        return {
-            "ok": True,
-            "threads": t,
-            "timestamp": time.time()
-        }
+        return {"ok": True, "threads": t, "timestamp": time.time()}
     except Exception as e:
         logger.error(f"[THREAD ERROR] {e}")
         raise HTTPException(status_code=500, detail="internal_thread_error")
+
 
 @brain_router.post("/restart")
 async def restart_brain():
@@ -907,17 +1034,21 @@ async def restart_brain():
     Safely restarts cognitive modules without killing API.
     """
     if not cog:
-        raise HTTPException(status_code=503, detail="Cognitive engine not available")
+        raise HTTPException(
+            status_code=503, detail="Cognitive engine not available"
+        )
     try:
         result = await cog.safe_restart()
         return {
             "ok": True,
             "message": "Cognitive engine restarted",
-            "details": result
+            "details": result,
         }
     except Exception as e:
         logger.error(f"[RESTART ERROR] {e}")
         raise HTTPException(status_code=500, detail="internal_restart_failed")
+
+
 # ------------- Clisonix Cloud API (EEG to Audio) -------------
 from fastapi.responses import StreamingResponse
 import numpy as np
@@ -925,12 +1056,15 @@ import io
 
 from fastapi import APIRouter
 
+
 @neural_router.get(
     "/neural-symphony",
     response_class=StreamingResponse,
     responses={
         200: {
-            "content": {"audio/wav": {"schema": {"type": "string", "format": "binary"}}},
+            "content": {
+                "audio/wav": {"schema": {"type": "string", "format": "binary"}}
+            },
             "description": "WAV audio stream generated from synthetic EEG alpha wave",
         }
     },
@@ -947,10 +1081,13 @@ async def neural_symphony():
     # Konverto në int16 për wav
     audio = np.int16(eeg_wave * 32767)
     import soundfile as sf
+
     buf = io.BytesIO()
-    sf.write(buf, audio, sr, format='WAV')
+    sf.write(buf, audio, sr, format="WAV")
     buf.seek(0)
     return StreamingResponse(buf, media_type="audio/wav")
+
+
 """
 Copyright (c) 2025 Ledjan Ahmati. All rights reserved.
 This software is proprietary and confidential. Unauthorized copying, distribution, or use is strictly prohibited.
@@ -982,9 +1119,7 @@ from itertools import islice
 from glob import glob
 
 # FastAPI / ASGI
-from fastapi import (
-    FastAPI, UploadFile, File, Request, HTTPException
-)
+from fastapi import FastAPI, UploadFile, File, Request, HTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -994,20 +1129,26 @@ BaseSettings = None
 # Config (env)
 try:
     from pydantic import BaseSettings
+
     _PYD = True
 except ImportError:
     try:
         from pydantic_settings import BaseSettings
+
         _PYD = True
     except ImportError:
         _PYD = False
+
         class BaseSettings(object):
             pass
+
+
 from pydantic import BaseModel
 
 # System metrics
 try:
     import psutil
+
     _PSUTIL = True
 except Exception:
     _PSUTIL = False
@@ -1015,6 +1156,7 @@ except Exception:
 # Redis (async)
 try:
     import redis.asyncio as aioredis
+
     _REDIS = True
 except Exception:
     _REDIS = False
@@ -1023,6 +1165,7 @@ except Exception:
 # PostgreSQL (async)
 try:
     import asyncpg
+
     _PG = True
 except Exception:
     _PG = False
@@ -1033,6 +1176,7 @@ try:
     import numpy as np
     import mne
     from scipy.signal import welch
+
     _EEG = True
 except Exception:
     _EEG = False
@@ -1041,12 +1185,14 @@ except Exception:
 try:
     import librosa
     import soundfile as sf
+
     _AUDIO = True
 except Exception:
     _AUDIO = False
 
 # HTTP
 import requests
+
 
 # ------------- Settings -------------
 class Settings(BaseSettings):
@@ -1058,19 +1204,27 @@ class Settings(BaseSettings):
 
     # Storage
     storage_dir: str = os.getenv("STORAGE_DIR", "./storage")
-    alba_collector_url: str = os.getenv("ALBA_COLLECTOR_URL", "http://127.0.0.1:8010")
+    alba_collector_url: str = os.getenv(
+        "ALBA_COLLECTOR_URL", "http://127.0.0.1:8010"
+    )
     mesh_hq_url: str = os.getenv("MESH_HQ_URL", "http://127.0.0.1:7777")
 
     # Redis
-    redis_url: Optional[str] = os.getenv("REDIS_URL")  # e.g. redis://localhost:6379/0
+    redis_url: Optional[str] = os.getenv(
+        "REDIS_URL"
+    )  # e.g. redis://localhost:6379/0
 
     # Postgres
-    database_url: Optional[str] = os.getenv("DATABASE_URL")  # e.g. postgresql://user:pass@localhost:5432/db
+    database_url: Optional[str] = os.getenv(
+        "DATABASE_URL"
+    )  # e.g. postgresql://user:pass@localhost:5432/db
 
     # PayPal
     paypal_client_id: Optional[str] = os.getenv("PAYPAL_CLIENT_ID")
     paypal_secret: Optional[str] = os.getenv("PAYPAL_SECRET")
-    paypal_base: str = os.getenv("PAYPAL_BASE", "https://api-m.sandbox.paypal.com")  # change to live when ready
+    paypal_base: str = os.getenv(
+        "PAYPAL_BASE", "https://api-m.sandbox.paypal.com"
+    )  # change to live when ready
 
     # Stripe
     stripe_api_key: Optional[str] = os.getenv("STRIPE_API_KEY")
@@ -1078,6 +1232,7 @@ class Settings(BaseSettings):
 
     class Config:
         case_sensitive = True
+
 
 settings = Settings()
 
@@ -1088,7 +1243,9 @@ if str(ROOT_DIR) not in sys.path:
 
 try:  # Core analytics engine (optional)
     from albi_core import AlbiCore  # type: ignore
-except Exception:  # pragma: no cover - missing module is acceptable in minimal setups
+except (
+    Exception
+):  # pragma: no cover - missing module is acceptable in minimal setups
     AlbiCore = None  # type: ignore
 
 # ALBI_ENGINE initialized lazily above
@@ -1100,6 +1257,7 @@ MESH_DIR = ROOT_DIR / "backend" / "mesh"
 MESH_STATUS_FILE = MESH_DIR / "nodes_status.json"
 MESH_LOG_DIR = ROOT_DIR / "logs"
 
+
 # ------------- Logging -------------
 def setup_logging():
     Path("logs").mkdir(exist_ok=True)
@@ -1109,10 +1267,11 @@ def setup_logging():
         format=fmt,
         handlers=[
             logging.StreamHandler(sys.stdout),
-            logging.FileHandler("logs/Clisonix_real.log", encoding="utf-8")
+            logging.FileHandler("logs/Clisonix_real.log", encoding="utf-8"),
         ],
     )
     return logging.getLogger("Clisonix_real")
+
 
 logger = setup_logging()
 
@@ -1128,25 +1287,26 @@ pg_pool: Optional[Any] = None
 
 # ------------- Schemas -------------
 
+
 class ErrorEnvelope(BaseModel):
-    error: str = ''
-    message: str = ''
-    timestamp: str = ''
-    instance: str = ''
-    correlation_id: str = ''
+    error: str = ""
+    message: str = ""
+    timestamp: str = ""
+    instance: str = ""
+    correlation_id: str = ""
     path: Optional[str] = None
     details: Optional[Any] = None
 
 
 class AskRequest(BaseModel):
-    question: str = ''
+    question: str = ""
     context: Optional[str] = None
     include_details: bool = True
 
 
 class AskResponse(BaseModel):
-    answer: str = ''
-    timestamp: str = ''
+    answer: str = ""
+    timestamp: str = ""
     modules_used: List[str] = []
     processing_time_ms: float = 0.0
     details: Dict[str, Any] = {}
@@ -1158,7 +1318,7 @@ class MemoryUsage(BaseModel):
 
 
 class ServiceStatus(BaseModel):
-    status: str = ''
+    status: str = ""
     message: Optional[str] = None
     connected_clients: Optional[int] = None
     used_memory: Optional[str] = None
@@ -1175,40 +1335,40 @@ class SystemMetrics(BaseModel):
     net_bytes_sent: int = 0
     net_bytes_recv: int = 0
     processes: int = 0
-    hostname: str = ''
+    hostname: str = ""
     boot_time: float = 0.0
     uptime_seconds: float = 0.0
 
 
 class HealthResponse(BaseModel):
-    service: str = ''
-    status: str = ''
-    version: str = ''
-    timestamp: str = ''
-    instance_id: str = ''
+    service: str = ""
+    status: str = ""
+    version: str = ""
+    timestamp: str = ""
+    instance_id: str = ""
     uptime_app_seconds: float = 0.0
     system: SystemMetrics = SystemMetrics()
     redis: ServiceStatus = ServiceStatus()
     database: ServiceStatus = ServiceStatus()
-    environment: str = ''
+    environment: str = ""
 
 
 class StatusResponse(BaseModel):
-    timestamp: str = ''
-    instance_id: str = ''
-    status: str = ''
-    uptime: str = ''
+    timestamp: str = ""
+    instance_id: str = ""
+    status: str = ""
+    uptime: str = ""
     memory: MemoryUsage = MemoryUsage()
     system: SystemMetrics = SystemMetrics()
     redis: ServiceStatus = ServiceStatus()
     database: ServiceStatus = ServiceStatus()
-    storage_dir: str = ''
+    storage_dir: str = ""
     dependencies: Dict[str, bool] = {}
 
 
 class PayPalAmount(BaseModel):
-    currency_code: str = ''
-    value: str = ''
+    currency_code: str = ""
+    value: str = ""
 
 
 class PayPalPurchaseUnit(BaseModel):
@@ -1217,13 +1377,13 @@ class PayPalPurchaseUnit(BaseModel):
 
 
 class PayPalCreateOrderRequest(BaseModel):
-    intent: str = ''
+    intent: str = ""
     purchase_units: List[PayPalPurchaseUnit] = []
 
 
 class StripePaymentIntentRequest(BaseModel):
     amount: int = 0
-    currency: str = ''
+    currency: str = ""
     payment_method_types: Optional[List[str]] = None
     description: Optional[str] = None
     customer: Optional[str] = None
@@ -1231,28 +1391,31 @@ class StripePaymentIntentRequest(BaseModel):
 
 
 class SepaInitiateRequest(BaseModel):
-    debtor_iban: str = ''
-    creditor_iban: str = ''
-    amount: str = ''
-    currency: str = 'EUR'
+    debtor_iban: str = ""
+    creditor_iban: str = ""
+    amount: str = ""
+    currency: str = "EUR"
     remittance_information: Optional[str] = None
 
 
 class SimpleAck(BaseModel):
-    status: str = ''
-    timestamp: str = ''
+    status: str = ""
+    timestamp: str = ""
 
 
 class ASIExecuteRequest(BaseModel):
     command: Optional[str] = None
-    agent: str = 'trinity'
+    agent: str = "trinity"
     parameters: Dict[str, Any] = {}
 
     class Config:
         extra = "allow"
 
+
 # ------------- Utils -------------
-def require(cond: bool, msg: str, code: int = 503, *, error_code: Optional[str] = None):
+def require(
+    cond: bool, msg: str, code: int = 503, *, error_code: Optional[str] = None
+):
     if not cond:
         detail: Any
         if error_code:
@@ -1261,15 +1424,21 @@ def require(cond: bool, msg: str, code: int = 503, *, error_code: Optional[str] 
             detail = msg
         raise HTTPException(status_code=code, detail=detail)
 
+
 def utcnow() -> str:
     return datetime.utcnow().replace(tzinfo=timezone.utc).isoformat()
+
 
 def safe_bool(v: Any) -> bool:
     return str(v).lower() in ("1", "true", "yes", "on")
 
 
 def _get_correlation_id(request: Request) -> str:
-    return getattr(request.state, "correlation_id", f"REQ-{int(time.time())}-{uuid.uuid4().hex[:6]}")
+    return getattr(
+        request.state,
+        "correlation_id",
+        f"REQ-{int(time.time())}-{uuid.uuid4().hex[:6]}",
+    )
 
 
 def error_response(
@@ -1292,17 +1461,22 @@ def error_response(
     ).dict(exclude_none=True)
     return JSONResponse(status_code=status_code, content=body)
 
+
 # Add Prometheus metrics middleware
 try:
     from metrics import MetricsMiddleware, get_metrics
+
     app.add_middleware(MetricsMiddleware)
-    
+
     @app.get("/metrics")
     async def metrics():
         """Prometheus metrics endpoint"""
         from starlette.responses import Response
-        return Response(content=get_metrics(), media_type="text/plain; version=0.0.4")
-    
+
+        return Response(
+            content=get_metrics(), media_type="text/plain; version=0.0.4"
+        )
+
     logger.info("[OK] Prometheus metrics middleware initialized")
 except ImportError as e:
     logger.warning(f"Prometheus metrics not available: {e}")
@@ -1313,7 +1487,10 @@ app.include_router(neural_router)
 
 SERVICE_PROBES = [
     {"name": "API Core", "url": "http://127.0.0.1:8000/health"},
-    {"name": "ALBA Collector", "url": f"{settings.alba_collector_url.rstrip('/')}/health"},
+    {
+        "name": "ALBA Collector",
+        "url": f"{settings.alba_collector_url.rstrip('/')}/health",
+    },
     {"name": "Mesh Orchestrator", "url": "http://127.0.0.1:5555/health"},
     {"name": "Clisonix Web", "url": "http://127.0.0.1:3000"},
 ]
@@ -1368,22 +1545,41 @@ def collect_service_processes(ports: List[int]) -> List[Dict[str, Any]]:
         return []
     # Ensure psutil is imported before use
     import psutil  # type: ignore
+
     results: List[Dict[str, Any]] = []
-    for proc in psutil.process_iter(["pid", "name", "cmdline", "connections", "cpu_percent", "memory_info"]):
+    for proc in psutil.process_iter(
+        ["pid", "name", "cmdline", "connections", "cpu_percent", "memory_info"]
+    ):
         try:
             connections = proc.info.get("connections") or []
-            listening = [conn for conn in connections if getattr(conn, "laddr", None) and conn.laddr.port in ports]
+            listening = [
+                conn
+                for conn in connections
+                if getattr(conn, "laddr", None) and conn.laddr.port in ports
+            ]
             if not listening:
                 continue
-            results.append({
-                "pid": proc.pid,
-                "name": proc.info.get("name"),
-                "cmdline": proc.info.get("cmdline"),
-                "ports": [conn.laddr.port for conn in listening if getattr(conn, "laddr", None)],
-                "cpu_percent": proc.cpu_percent(interval=None),
-                "memory_mb": round(proc.memory_info().rss / (1024 * 1024), 2) if proc.info.get("memory_info") else None,
-                "create_time": datetime.fromtimestamp(proc.create_time(), tz=timezone.utc).isoformat(),
-            })
+            results.append(
+                {
+                    "pid": proc.pid,
+                    "name": proc.info.get("name"),
+                    "cmdline": proc.info.get("cmdline"),
+                    "ports": [
+                        conn.laddr.port
+                        for conn in listening
+                        if getattr(conn, "laddr", None)
+                    ],
+                    "cpu_percent": proc.cpu_percent(interval=None),
+                    "memory_mb": (
+                        round(proc.memory_info().rss / (1024 * 1024), 2)
+                        if proc.info.get("memory_info")
+                        else None
+                    ),
+                    "create_time": datetime.fromtimestamp(
+                        proc.create_time(), tz=timezone.utc
+                    ).isoformat(),
+                }
+            )
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             continue
     return results
@@ -1391,7 +1587,9 @@ def collect_service_processes(ports: List[int]) -> List[Dict[str, Any]]:
 
 def collect_mesh_nodes() -> Dict[str, Any]:
     try:
-        response = requests.get(f"{settings.mesh_hq_url.rstrip('/')}/mesh/nodes", timeout=2.0)
+        response = requests.get(
+            f"{settings.mesh_hq_url.rstrip('/')}/mesh/nodes", timeout=2.0
+        )
         response.raise_for_status()
         nodes = response.json()
     except requests.RequestException:
@@ -1414,10 +1612,12 @@ def collect_mesh_logs(limit: int = 5) -> List[Dict[str, Any]]:
         try:
             with open(path, "r", encoding="utf-8", errors="ignore") as handle:
                 lines = handle.readlines()[-5:]
-            entries.append({
-                "file": path,
-                "tail": [line.rstrip("\n") for line in lines],
-            })
+            entries.append(
+                {
+                    "file": path,
+                    "tail": [line.rstrip("\n") for line in lines],
+                }
+            )
         except OSError as exc:
             logger.debug("Failed to read log %s: %s", path, exc)
     return entries
@@ -1432,7 +1632,9 @@ def system_snapshot() -> Dict[str, Any]:
             snapshot["cpu_percent"] = psutil.cpu_percent(interval=None)
             mem = psutil.virtual_memory()
             snapshot["memory_percent"] = round(mem.percent, 2)
-            snapshot["memory_available_mb"] = round(mem.available / (1024 * 1024), 2)
+            snapshot["memory_available_mb"] = round(
+                mem.available / (1024 * 1024), 2
+            )
             snapshot["memory_total_mb"] = round(mem.total / (1024 * 1024), 2)
         except Exception as exc:  # pragma: no cover - psutil edge
             logger.debug("System snapshot failed: %s", exc)
@@ -1465,7 +1667,9 @@ def summarize_alba(entries: List[Dict[str, Any]]) -> Dict[str, Any]:
         return {"total": 0, "types": {}, "latest": None}
     counts: Dict[str, int] = {}
     for entry in entries:
-        counts[entry.get("type", "unknown")] = counts.get(entry.get("type", "unknown"), 0) + 1
+        counts[entry.get("type", "unknown")] = (
+            counts.get(entry.get("type", "unknown"), 0) + 1
+        )
     latest = entries[-1]
     return {
         "total": len(entries),
@@ -1480,7 +1684,9 @@ def summarize_alba(entries: List[Dict[str, Any]]) -> Dict[str, Any]:
     }
 
 
-def derive_albi_insight(entries: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+def derive_albi_insight(
+    entries: List[Dict[str, Any]],
+) -> Optional[Dict[str, Any]]:
     channels: Dict[str, List[float]] = defaultdict(list)
     frames: List[Dict[str, Dict[str, float]]] = []
     for entry in entries:
@@ -1510,7 +1716,11 @@ def derive_albi_insight(entries: List[Dict[str, Any]]) -> Optional[Dict[str, Any
             "latest": values[-1],
         }
 
-    baseline = statistics.fmean(stat["avg"] for stat in summary.values()) if summary else 0.0
+    baseline = (
+        statistics.fmean(stat["avg"] for stat in summary.values())
+        if summary
+        else 0.0
+    )
     anomalies: List[str] = []
     if baseline:
         for channel, stat in summary.items():
@@ -1525,11 +1735,22 @@ def derive_albi_insight(entries: List[Dict[str, Any]]) -> Optional[Dict[str, Any
             insight = albi_engine.learn(frames)
             if insight.summary:
                 for channel_name, avg_val in insight.summary.items():
-                    summary.setdefault(channel_name, {"avg": avg_val, "min": avg_val, "max": avg_val, "latest": avg_val})
+                    summary.setdefault(
+                        channel_name,
+                        {
+                            "avg": avg_val,
+                            "min": avg_val,
+                            "max": avg_val,
+                            "latest": avg_val,
+                        },
+                    )
                     summary[channel_name]["avg"] = avg_val
             if insight.anomalies:
                 anomalies = sorted(set(anomalies) | set(insight.anomalies))
-            if hasattr(albi_engine, "_insights") and len(getattr(albi_engine, "_insights", [])) > 50:
+            if (
+                hasattr(albi_engine, "_insights")
+                and len(getattr(albi_engine, "_insights", [])) > 50
+            ):
                 albi_engine._insights = albi_engine._insights[-50:]
         except Exception as exc:  # pragma: no cover - defensive
             logger.debug("AlbiCore insight failed: %s", exc)
@@ -1549,30 +1770,87 @@ def probe_services() -> List[Dict[str, Any]]:
         try:
             res = requests.get(url, timeout=1.5)
             reachable = res.status_code < 500
-            statuses.append({
-                "name": probe["name"],
-                "url": url,
-                "status_code": res.status_code,
-                "reachable": reachable,
-            })
+            statuses.append(
+                {
+                    "name": probe["name"],
+                    "url": url,
+                    "status_code": res.status_code,
+                    "reachable": reachable,
+                }
+            )
         except requests.RequestException as exc:
-            statuses.append({
-                "name": probe["name"],
-                "url": url,
-                "reachable": False,
-                "error": str(exc),
-            })
+            statuses.append(
+                {
+                    "name": probe["name"],
+                    "url": url,
+                    "reachable": False,
+                    "error": str(exc),
+                }
+            )
     return statuses
 
 
 def detect_intents(question: str) -> Dict[str, bool]:
     q = question.lower()
     return {
-        "greeting": any(token in q for token in ["hello", "hi", "hej", "persh", "ciao", "hey", "mirdita"]),
-        "status": any(token in q for token in ["status", "si je", "si ndjehesh", "gjendja", "uptime", "load"]),
-        "telemetry": any(token in q for token in ["alba", "telemetry", "collector", "data", "sensor", "stream"]),
-        "analytics": any(token in q for token in ["albi", "eeg", "analysis", "pattern", "brain", "wave", "signal"]),
-        "synthesis": any(token in q for token in ["jona", "neural", "sinte", "audio", "synthesis", "coordinate", "koord"]),
+        "greeting": any(
+            token in q
+            for token in [
+                "hello",
+                "hi",
+                "hej",
+                "persh",
+                "ciao",
+                "hey",
+                "mirdita",
+            ]
+        ),
+        "status": any(
+            token in q
+            for token in [
+                "status",
+                "si je",
+                "si ndjehesh",
+                "gjendja",
+                "uptime",
+                "load",
+            ]
+        ),
+        "telemetry": any(
+            token in q
+            for token in [
+                "alba",
+                "telemetry",
+                "collector",
+                "data",
+                "sensor",
+                "stream",
+            ]
+        ),
+        "analytics": any(
+            token in q
+            for token in [
+                "albi",
+                "eeg",
+                "analysis",
+                "pattern",
+                "brain",
+                "wave",
+                "signal",
+            ]
+        ),
+        "synthesis": any(
+            token in q
+            for token in [
+                "jona",
+                "neural",
+                "sinte",
+                "audio",
+                "synthesis",
+                "coordinate",
+                "koord",
+            ]
+        ),
     }
 
 
@@ -1585,7 +1863,9 @@ async def ask_api(payload: AskRequest, request: Request) -> AskResponse:
     start_ts = time.perf_counter()
     question = payload.question.strip()
     if not question:
-        raise HTTPException(status_code=400, detail="Question must not be empty.")
+        raise HTTPException(
+            status_code=400, detail="Question must not be empty."
+        )
 
     intents = detect_intents(question)
     modules_used: List[str] = []
@@ -1617,7 +1897,9 @@ async def ask_api(payload: AskRequest, request: Request) -> AskResponse:
     }
 
     if intents["greeting"]:
-        segments.append("Përshëndetje! Clisonix është aktiv dhe gati të asistojë.")
+        segments.append(
+            "Përshëndetje! Clisonix është aktiv dhe gati të asistojë."
+        )
 
     snapshot = system_snapshot()
     details["system"] = snapshot
@@ -1626,7 +1908,8 @@ async def ask_api(payload: AskRequest, request: Request) -> AskResponse:
         cpu_txt = f"{snapshot.get('cpu_percent', 'n/a')}%"
         mem_txt = f"{snapshot.get('memory_percent', 'n/a')}%"
         segments.append(
-            f"Statusi aktual: CPU {cpu_txt}, RAM {mem_txt}, uptime {snapshot.get('uptime_human', 'n/a')}.")
+            f"Statusi aktual: CPU {cpu_txt}, RAM {mem_txt}, uptime {snapshot.get('uptime_human', 'n/a')}."
+        )
 
     alba_entries: List[Dict[str, Any]] = []
     if intents["telemetry"] or intents["analytics"]:
@@ -1645,7 +1928,9 @@ async def ask_api(payload: AskRequest, request: Request) -> AskResponse:
                 )
             )
         else:
-            segments.append("ALBA nuk ka telemetri aktive për t'u raportuar tani.")
+            segments.append(
+                "ALBA nuk ka telemetri aktive për t'u raportuar tani."
+            )
 
     if intents["analytics"]:
         insight = derive_albi_insight(alba_entries)
@@ -1655,9 +1940,12 @@ async def ask_api(payload: AskRequest, request: Request) -> AskResponse:
             channel_slice = list(insight["summary"].items())[:4]
             if channel_slice:
                 metrics = ", ".join(
-                    f"{name}={stats['avg']:.2f}" for name, stats in channel_slice
+                    f"{name}={stats['avg']:.2f}"
+                    for name, stats in channel_slice
                 )
-                segments.append(f"ALBI përllogatit mesatare kanalesh: {metrics}.")
+                segments.append(
+                    f"ALBI përllogatit mesatare kanalesh: {metrics}."
+                )
             if insight["anomalies"]:
                 segments.append(
                     "ALBI sinjalizon vëzhgime jo-tipike te kanalet: {}.".format(
@@ -1665,7 +1953,9 @@ async def ask_api(payload: AskRequest, request: Request) -> AskResponse:
                     )
                 )
         else:
-            segments.append("ALBI nuk gjeti të dhëna numerike për t'i analizuar në këtë grup sinjalesh.")
+            segments.append(
+                "ALBI nuk gjeti të dhëna numerike për t'i analizuar në këtë grup sinjalesh."
+            )
 
     if service_processes:
         modules_used.append("JONA")
@@ -1674,13 +1964,17 @@ async def ask_api(payload: AskRequest, request: Request) -> AskResponse:
             ports = ",".join(str(p) for p in proc.get("ports", [])) or "n/a"
             cpu_use = f"{proc.get('cpu_percent', 'n/a')}%"
             mem_use = (
-                f"{proc['memory_mb']} MB" if proc.get("memory_mb") is not None else "n/a"
+                f"{proc['memory_mb']} MB"
+                if proc.get("memory_mb") is not None
+                else "n/a"
             )
             process_lines.append(
                 f"PID {proc['pid']} ({proc.get('name', 'unknown')}): ports {ports}, CPU {cpu_use}, RAM {mem_use}."
             )
         if process_lines:
-            segments.append("Procese shï¿½rbimesh aktive:\n" + "\n".join(process_lines[:6]))
+            segments.append(
+                "Procese shï¿½rbimesh aktive:\n" + "\n".join(process_lines[:6])
+            )
 
     if clisonix_events:
         modules_used.append("NEUROTRIGGER")
@@ -1688,22 +1982,39 @@ async def ask_api(payload: AskRequest, request: Request) -> AskResponse:
             f"[{ev.get('category','unknown').upper()}] {ev.get('message','')} @ {ev.get('readable_time','')}"
             for ev in clisonix_events[-5:]
         ]
-        segments.append("NeuroTrigger event log (mï¿½ tï¿½ fundit):\n" + "\n".join(event_lines))
+        segments.append(
+            "NeuroTrigger event log (mï¿½ tï¿½ fundit):\n"
+            + "\n".join(event_lines)
+        )
     else:
-        segments.append("NeuroTrigger nuk ka regjistruar evente tï¿½ reja nï¿½ runtime.")
+        segments.append(
+            "NeuroTrigger nuk ka regjistruar evente tï¿½ reja nï¿½ runtime."
+        )
 
     if clisonix_scan:
         modules_used.append("CLISONIX")
         scan_lines = []
         for module, info in clisonix_scan.items():
-            cpu_val = info.get("cpu") if isinstance(info.get("cpu"), (int, float)) else info.get("cpu_percent")
+            cpu_val = (
+                info.get("cpu")
+                if isinstance(info.get("cpu"), (int, float))
+                else info.get("cpu_percent")
+            )
             cpu_txt = f"{cpu_val}%" if cpu_val is not None else "n/a"
-            ram_val = info.get("ram") if isinstance(info.get("ram"), (int, float)) else info.get("ram_percent")
+            ram_val = (
+                info.get("ram")
+                if isinstance(info.get("ram"), (int, float))
+                else info.get("ram_percent")
+            )
             ram_txt = f"{ram_val}%" if ram_val is not None else "n/a"
             status_txt = info.get("status", "unknown")
-            scan_lines.append(f"{module}: CPU {cpu_txt}, RAM {ram_txt}, status {status_txt}.")
+            scan_lines.append(
+                f"{module}: CPU {cpu_txt}, RAM {ram_txt}, status {status_txt}."
+            )
         if scan_lines:
-            segments.append("Smart Orchestrator module scan:\n" + "\n".join(scan_lines))
+            segments.append(
+                "Smart Orchestrator module scan:\n" + "\n".join(scan_lines)
+            )
 
     if mesh_nodes["nodes"]:
         modules_used.append("MESH-HQ")
@@ -1718,23 +2029,30 @@ async def ask_api(payload: AskRequest, request: Request) -> AskResponse:
                 )
             )
         segments.append(
-            f"Mesh HQ ndjek {mesh_nodes['count']} nyje aktive.\n" + "\n".join(node_lines[:6])
+            f"Mesh HQ ndjek {mesh_nodes['count']} nyje aktive.\n"
+            + "\n".join(node_lines[:6])
         )
     else:
-        segments.append("Mesh HQ nuk raportoi nyje aktive nï¿½ kï¿½tï¿½ moment.")
+        segments.append(
+            "Mesh HQ nuk raportoi nyje aktive nï¿½ kï¿½tï¿½ moment."
+        )
 
     if mesh_logs:
         log_summary = []
         for entry in mesh_logs:
             tail_preview = entry.get("tail", [])
             if tail_preview:
-                log_summary.append(f"{Path(entry['file']).name}: {tail_preview[-1]}")
+                log_summary.append(
+                    f"{Path(entry['file']).name}: {tail_preview[-1]}"
+                )
         if log_summary:
             segments.append("Mesh HQ log tail:\n" + "\n".join(log_summary))
 
     if intents["synthesis"]:
         modules_used.append("JONA")
-        reachable = sum(1 for state in service_states if state.get("reachable"))
+        reachable = sum(
+            1 for state in service_states if state.get("reachable")
+        )
         segments.append(
             f"JONA koordinon {reachable}/{len(service_states)} shï¿½rbime tï¿½ arritshme dhe ï¿½shtï¿½ gati pï¿½r sintezï¿½ neurale."  # noqa: E501
         )
@@ -1757,33 +2075,57 @@ async def ask_api(payload: AskRequest, request: Request) -> AskResponse:
         processing_time_ms=processing_time_ms,
     )
 
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], allow_methods=["*"], allow_headers=["*"], allow_credentials=True
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+    allow_credentials=True,
 )
 
 # Global error handlers for consistent JSON errors
 
+
 @app.exception_handler(StarletteHTTPException)
-async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+async def http_exception_handler(
+    request: Request, exc: StarletteHTTPException
+):
     detail = exc.detail
     error_code = f"HTTP_{exc.status_code}"
-    message = detail if isinstance(detail, str) else (detail.get("message") if isinstance(detail, dict) else str(exc))
+    message = (
+        detail
+        if isinstance(detail, str)
+        else (detail.get("message") if isinstance(detail, dict) else str(exc))
+    )
     details = detail.get("details") if isinstance(detail, dict) else None
     if isinstance(detail, dict) and detail.get("code"):
         error_code = str(detail["code"])
-    return error_response(request, exc.status_code, error_code, message, details=details)
+    return error_response(
+        request, exc.status_code, error_code, message, details=details
+    )
 
 
 @app.exception_handler(RequestValidationError)
-async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    return error_response(request, 422, "VALIDATION_ERROR", "Validation error", details=exc.errors())
+async def validation_exception_handler(
+    request: Request, exc: RequestValidationError
+):
+    return error_response(
+        request,
+        422,
+        "VALIDATION_ERROR",
+        "Validation error",
+        details=exc.errors(),
+    )
 
 
 @app.exception_handler(Exception)
 async def generic_exception_handler(request: Request, exc: Exception):
     logger.error("Unhandled exception", exc_info=True)
-    return error_response(request, 500, "INTERNAL_SERVER_ERROR", "Internal server error")
+    return error_response(
+        request, 500, "INTERNAL_SERVER_ERROR", "Internal server error"
+    )
+
 
 # ------------- Startup/Shutdown (DISABLED - using lifespan instead) ---------
 # @app.on_event("startup")
@@ -1796,7 +2138,9 @@ async def on_startup():
     # Redis
     if _REDIS and settings.redis_url:
         try:
-            redis_client = aioredis.from_url(settings.redis_url, encoding="utf-8", decode_responses=True)
+            redis_client = aioredis.from_url(
+                settings.redis_url, encoding="utf-8", decode_responses=True
+            )
             await asyncio.wait_for(redis_client.ping(), timeout=5)
             logger.info("✓ Redis connected.")
         except Exception as e:
@@ -1806,13 +2150,19 @@ async def on_startup():
     # Postgres
     if _PG and settings.database_url:
         try:
-            pg_pool = await asyncpg.create_pool(settings.database_url, min_size=1, max_size=10, command_timeout=10)
+            pg_pool = await asyncpg.create_pool(
+                settings.database_url,
+                min_size=1,
+                max_size=10,
+                command_timeout=10,
+            )
             async with pg_pool.acquire() as conn:
                 await conn.execute("SELECT 1;")
             logger.info("✓ PostgreSQL pool ready.")
         except Exception as e:
             logger.error(f"⚠️  PostgreSQL unavailable: {e}")
             pg_pool = None
+
 
 # @app.on_event("shutdown")
 async def on_shutdown():
@@ -1828,16 +2178,23 @@ async def on_shutdown():
     except Exception:
         pass
 
+
 # ------------- Middlewares -------------
 @app.middleware("http")
 async def correlation_middleware(request: Request, call_next):
-    cid = request.headers.get("X-Correlation-ID", f"REQ-{int(time.time())}-{uuid.uuid4().hex[:6]}")
+    cid = request.headers.get(
+        "X-Correlation-ID", f"REQ-{int(time.time())}-{uuid.uuid4().hex[:6]}"
+    )
     request.state.correlation_id = cid
     try:
         response = await call_next(request)
     except Exception as e:
-        logger.error(f"Unhandled error on {request.url.path}: {e}", exc_info=True)
-        response = error_response(request, 500, "INTERNAL_SERVER_ERROR", "Internal server error")
+        logger.error(
+            f"Unhandled error on {request.url.path}: {e}", exc_info=True
+        )
+        response = error_response(
+            request, 500, "INTERNAL_SERVER_ERROR", "Internal server error"
+        )
         response.headers["X-Correlation-ID"] = cid
         response.headers["X-Instance-ID"] = INSTANCE_ID
         response.headers["X-Environment"] = settings.environment
@@ -1847,13 +2204,18 @@ async def correlation_middleware(request: Request, call_next):
     response.headers["X-Environment"] = settings.environment
     return response
 
+
 # Optional simple rate-limit per IP (no fake counters; purely request-count in memory window)
 RATE_BUCKET: Dict[str, list] = {}
+
+
 @app.middleware("http")
 async def simple_rate_limit(request: Request, call_next):
-    ip = request.headers.get("X-Forwarded-For", "").split(",")[0].strip() or \
-         request.headers.get("X-Real-IP") or \
-         (request.client.host if request.client else "unknown")
+    ip = (
+        request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
+        or request.headers.get("X-Real-IP")
+        or (request.client.host if request.client else "unknown")
+    )
 
     now = time.time()
     window = 60.0
@@ -1877,12 +2239,14 @@ async def simple_rate_limit(request: Request, call_next):
 
     return await call_next(request)
 
+
 # ------------- Health & Status -------------
 def get_system_metrics() -> Dict[str, Any]:
     if not _PSUTIL:
         raise HTTPException(status_code=501, detail="psutil not installed")
     try:
         import psutil  # Ensure psutil is imported in this scope
+
         cpu = psutil.cpu_percent(interval=0.1)
         vm = psutil.virtual_memory()
         disk = psutil.disk_usage(Path(settings.storage_dir).anchor or "/")
@@ -1905,6 +2269,7 @@ def get_system_metrics() -> Dict[str, Any]:
         logger.error(f"psutil error: {e}")
         raise HTTPException(status_code=500, detail="system metrics error")
 
+
 async def get_redis_status() -> Dict[str, Any]:
     if not redis_client:
         return {"status": "not_configured"}
@@ -1915,11 +2280,12 @@ async def get_redis_status() -> Dict[str, Any]:
             "status": "connected" if pong else "unknown",
             "connected_clients": info.get("connected_clients"),
             "used_memory": info.get("used_memory_human"),
-            "uptime_seconds": info.get("uptime_in_seconds")
+            "uptime_seconds": info.get("uptime_in_seconds"),
         }
     except Exception as e:
         logger.error(f"Redis status error: {e}")
         return {"status": "error", "message": str(e)}
+
 
 async def get_db_status() -> Dict[str, Any]:
     if not pg_pool:
@@ -1934,7 +2300,12 @@ async def get_db_status() -> Dict[str, Any]:
         logger.error(f"DB status error: {e}")
         return {"status": "error", "message": str(e)}
 
-@app.get("/health", response_model=HealthResponse, responses={503: {"model": ErrorEnvelope}, 500: {"model": ErrorEnvelope}})
+
+@app.get(
+    "/health",
+    response_model=HealthResponse,
+    responses={503: {"model": ErrorEnvelope}, 500: {"model": ErrorEnvelope}},
+)
 async def health():
     sysm = get_system_metrics()
     redis_s = await get_redis_status()
@@ -1949,17 +2320,26 @@ async def health():
         "system": sysm,
         "redis": redis_s,
         "database": db_s,
-        "environment": settings.environment
+        "environment": settings.environment,
     }
 
-@app.get("/status", response_model=StatusResponse, responses={503: {"model": ErrorEnvelope}, 500: {"model": ErrorEnvelope}})
+
+@app.get(
+    "/status",
+    response_model=StatusResponse,
+    responses={503: {"model": ErrorEnvelope}, 500: {"model": ErrorEnvelope}},
+)
 async def status_full():
     sys_metrics = get_system_metrics()
     uptime_seconds = sys_metrics.get("uptime_seconds", 0)
     uptime_h = int(uptime_seconds // 3600)
     uptime_m = int((uptime_seconds % 3600) // 60)
     memory_total = sys_metrics.get("memory_total", 0)
-    memory_used = int(sys_metrics.get("memory_percent", 0) * memory_total / 100) if memory_total else 0
+    memory_used = (
+        int(sys_metrics.get("memory_percent", 0) * memory_total / 100)
+        if memory_total
+        else 0
+    )
     return {
         "timestamp": utcnow(),
         "instance_id": INSTANCE_ID,
@@ -1967,7 +2347,7 @@ async def status_full():
         "uptime": f"{uptime_h}h {uptime_m}m",
         "memory": {
             "used": memory_used // (1024 * 1024),
-            "total": memory_total // (1024 * 1024)
+            "total": memory_total // (1024 * 1024),
         },
         "system": sys_metrics,
         "redis": await get_redis_status(),
@@ -1978,17 +2358,25 @@ async def status_full():
             "redis": bool(redis_client),
             "postgres": bool(pg_pool),
             "eeg_mne": _EEG,
-            "audio_librosa": _AUDIO
-        }
+            "audio_librosa": _AUDIO,
+        },
     }
 
-@app.get("/api/system-status", response_model=StatusResponse, responses={503: {"model": ErrorEnvelope}, 500: {"model": ErrorEnvelope}})
+
+@app.get(
+    "/api/system-status",
+    response_model=StatusResponse,
+    responses={503: {"model": ErrorEnvelope}, 500: {"model": ErrorEnvelope}},
+)
 async def system_status_api():
     """Proxy endpoint for frontend API calls (same as /status)"""
     return await status_full()
 
+
 # ------------- EEG Processing (REAL) -------------
-def _eeg_band_powers(raw: "mne.io.BaseRaw", fmin: float, fmax: float) -> Dict[str, float]:
+def _eeg_band_powers(
+    raw: "mne.io.BaseRaw", fmin: float, fmax: float
+) -> Dict[str, float]:
     data = raw.get_data(return_times=False)
     sfreq = raw.info["sfreq"]
     # Ensure data is a numpy array (not a tuple)
@@ -2005,8 +2393,14 @@ def _eeg_band_powers(raw: "mne.io.BaseRaw", fmin: float, fmax: float) -> Dict[st
         return {"mean": 0.0, "max": 0.0}
     return {"mean": float(np.mean(psd_vals)), "max": float(np.max(psd_vals))}
 
+
 def analyze_eeg_file(file_path: Path) -> Dict[str, Any]:
-    require(_EEG, "EEG analysis libs (mne, numpy, scipy) not installed", 501, error_code="EEG_LIBS_UNAVAILABLE")
+    require(
+        _EEG,
+        "EEG analysis libs (mne, numpy, scipy) not installed",
+        501,
+        error_code="EEG_LIBS_UNAVAILABLE",
+    )
     # Try format detection
     suffix = file_path.suffix.lower()
     # Load using mne supported readers; we do not fabricate any values.
@@ -2019,7 +2413,9 @@ def analyze_eeg_file(file_path: Path) -> Dict[str, Any]:
         raw = mne.io.read_raw(str(file_path), preload=True, verbose=False)
 
     raw.load_data()
-    raw.filter(1., 45., verbose=False)  # real DSP; deterministic, not simulated
+    raw.filter(
+        1.0, 45.0, verbose=False
+    )  # real DSP; deterministic, not simulated
 
     info = {
         "channels": len(raw.ch_names),
@@ -2033,23 +2429,25 @@ def analyze_eeg_file(file_path: Path) -> Dict[str, Any]:
         "delta": _eeg_band_powers(raw, 0.5, 4),
         "theta": _eeg_band_powers(raw, 4, 8),
         "alpha": _eeg_band_powers(raw, 8, 13),
-        "beta":  _eeg_band_powers(raw, 13, 30),
+        "beta": _eeg_band_powers(raw, 13, 30),
         "gamma": _eeg_band_powers(raw, 30, 45),
     }
 
-    return {
-        "file": file_path.name,
-        "info": info,
-        "bands_psd": bands
-    }
+    return {"file": file_path.name, "info": info, "bands_psd": bands}
+
 
 @app.post("/api/uploads/eeg/process")
 async def process_eeg(
     file: UploadFile = File(...),
-    current_user: Dict[str, Any] = Depends(get_current_user_from_api_key)
+    current_user: Dict[str, Any] = Depends(get_current_user_from_api_key),
 ):
-    require(file.filename, "Missing filename", 400, error_code="MISSING_FILENAME")
-    dest = Path(settings.storage_dir) / f"eeg_{int(time.time())}_{uuid.uuid4().hex[:6]}_{Path(file.filename).name}"
+    require(
+        file.filename, "Missing filename", 400, error_code="MISSING_FILENAME"
+    )
+    dest = (
+        Path(settings.storage_dir)
+        / f"eeg_{int(time.time())}_{uuid.uuid4().hex[:6]}_{Path(file.filename).name}"
+    )
     try:
         with dest.open("wb") as f:
             # stream write real bytes
@@ -2059,27 +2457,38 @@ async def process_eeg(
                     break
                 f.write(chunk)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to store EEG file: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to store EEG file: {e}"
+        )
 
     try:
         analysis = analyze_eeg_file(dest)
-        return {
-            "status": "OK",
-            "timestamp": utcnow(),
-            "analysis": analysis
-        }
+        return {"status": "OK", "timestamp": utcnow(), "analysis": analysis}
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"EEG analyze error: {e}", exc_info=True)
-        raise HTTPException(status_code=400, detail=f"EEG analysis failed: {e}")
+        raise HTTPException(
+            status_code=400, detail=f"EEG analysis failed: {e}"
+        )
+
 
 # ------------- Audio Processing (REAL) -------------
 def analyze_audio_file(file_path: Path) -> Dict[str, Any]:
-    require(_AUDIO, "Audio analysis libs (librosa, soundfile) not installed", 501, error_code="AUDIO_LIBS_UNAVAILABLE")
+    require(
+        _AUDIO,
+        "Audio analysis libs (librosa, soundfile) not installed",
+        501,
+        error_code="AUDIO_LIBS_UNAVAILABLE",
+    )
     # librosa loads actual samples
     y, sr = librosa.load(str(file_path), sr=None, mono=True)
-    require(y.size > 0 and sr > 0, "Empty audio data", 400, error_code="EMPTY_AUDIO")
+    require(
+        y.size > 0 and sr > 0,
+        "Empty audio data",
+        400,
+        error_code="EMPTY_AUDIO",
+    )
 
     duration = float(len(y) / sr)
     # Real metrics
@@ -2091,7 +2500,9 @@ def analyze_audio_file(file_path: Path) -> Dict[str, Any]:
     # Fundamental frequency via pYIN (if possible), otherwise 0 (no fabrication)
     f0_mean = 0.0
     try:
-        f0, voiced_flag, _ = librosa.pyin(y, fmin=librosa.note_to_hz('C2'), fmax=librosa.note_to_hz('C7'))
+        f0, voiced_flag, _ = librosa.pyin(
+            y, fmin=librosa.note_to_hz("C2"), fmax=librosa.note_to_hz("C7")
+        )
         valid = f0[~np.isnan(f0)]
         if valid.size:
             f0_mean = float(np.mean(valid))
@@ -2106,16 +2517,22 @@ def analyze_audio_file(file_path: Path) -> Dict[str, Any]:
         "spectral_centroid": centroid,
         "spectral_rolloff": rolloff,
         "rms": rms,
-        "fundamental_hz": f0_mean
+        "fundamental_hz": f0_mean,
     }
+
 
 @app.post("/api/uploads/audio/process")
 async def process_audio(
     file: UploadFile = File(...),
-    current_user: Dict[str, Any] = Depends(get_current_user_from_api_key)
+    current_user: Dict[str, Any] = Depends(get_current_user_from_api_key),
 ):
-    require(file.filename, "Missing filename", 400, error_code="MISSING_FILENAME")
-    dest = Path(settings.storage_dir) / f"audio_{int(time.time())}_{uuid.uuid4().hex[:6]}_{Path(file.filename).name}"
+    require(
+        file.filename, "Missing filename", 400, error_code="MISSING_FILENAME"
+    )
+    dest = (
+        Path(settings.storage_dir)
+        / f"audio_{int(time.time())}_{uuid.uuid4().hex[:6]}_{Path(file.filename).name}"
+    )
     try:
         with dest.open("wb") as f:
             while True:
@@ -2124,24 +2541,31 @@ async def process_audio(
                     break
                 f.write(chunk)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to store audio file: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to store audio file: {e}"
+        )
 
     try:
         analysis = analyze_audio_file(dest)
-        return {
-            "status": "OK",
-            "timestamp": utcnow(),
-            "analysis": analysis
-        }
+        return {"status": "OK", "timestamp": utcnow(), "analysis": analysis}
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Audio analyze error: {e}", exc_info=True)
-        raise HTTPException(status_code=400, detail=f"Audio analysis failed: {e}")
+        raise HTTPException(
+            status_code=400, detail=f"Audio analysis failed: {e}"
+        )
+
 
 # ------------- Payments (REAL) -------------
 def require_paypal():
-    require(settings.paypal_client_id and settings.paypal_secret, "PayPal not configured", 501, error_code="PAYPAL_NOT_CONFIGURED")
+    require(
+        settings.paypal_client_id and settings.paypal_secret,
+        "PayPal not configured",
+        501,
+        error_code="PAYPAL_NOT_CONFIGURED",
+    )
+
 
 def paypal_token() -> str:
     require_paypal()
@@ -2150,19 +2574,26 @@ def paypal_token() -> str:
             f"{settings.paypal_base}/v1/oauth2/token",
             data={"grant_type": "client_credentials"},
             auth=(str(settings.paypal_client_id), str(settings.paypal_secret)),
-            timeout=10
+            timeout=10,
         )
         if r.status_code != 200:
             raise HTTPException(
                 status_code=r.status_code,
-                detail={"code": "PAYPAL_TOKEN_ERROR", "message": f"PayPal token error: {r.text}"},
+                detail={
+                    "code": "PAYPAL_TOKEN_ERROR",
+                    "message": f"PayPal token error: {r.text}",
+                },
             )
         return r.json()["access_token"]
     except requests.RequestException as e:
         raise HTTPException(
             status_code=502,
-            detail={"code": "PAYPAL_NETWORK_ERROR", "message": f"PayPal network error: {e}"},
+            detail={
+                "code": "PAYPAL_NETWORK_ERROR",
+                "message": f"PayPal network error: {e}",
+            },
         )
+
 
 @app.post(
     "/billing/paypal/order",
@@ -2171,7 +2602,7 @@ def paypal_token() -> str:
 )
 def paypal_create_order(
     payload: PayPalCreateOrderRequest,
-    current_user: Dict[str, Any] = Depends(get_current_user_from_api_key)
+    current_user: Dict[str, Any] = Depends(get_current_user_from_api_key),
 ):
     """
     Create PayPal order (REAL sandbox/live depending on PAYPAL_BASE).
@@ -2186,16 +2617,23 @@ def paypal_create_order(
         payload_dict = payload.dict(exclude_none=True)
         r = requests.post(
             f"{settings.paypal_base}/v2/checkout/orders",
-            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json",
+            },
             json=payload_dict,
-            timeout=15
+            timeout=15,
         )
         return JSONResponse(status_code=r.status_code, content=r.json())
     except requests.RequestException as e:
         raise HTTPException(
             status_code=502,
-            detail={"code": "PAYPAL_CREATE_ERROR", "message": f"PayPal create order error: {e}"},
+            detail={
+                "code": "PAYPAL_CREATE_ERROR",
+                "message": f"PayPal create order error: {e}",
+            },
         )
+
 
 @app.post(
     "/billing/paypal/capture/{order_id}",
@@ -2204,24 +2642,34 @@ def paypal_create_order(
 )
 def paypal_capture_order(
     order_id: str,
-    current_user: Dict[str, Any] = Depends(get_current_user_from_api_key)
+    current_user: Dict[str, Any] = Depends(get_current_user_from_api_key),
 ):
     token = paypal_token()
     try:
         r = requests.post(
             f"{settings.paypal_base}/v2/checkout/orders/{order_id}/capture",
             headers={"Authorization": f"Bearer {token}"},
-            timeout=15
+            timeout=15,
         )
         return JSONResponse(status_code=r.status_code, content=r.json())
     except requests.RequestException as e:
         raise HTTPException(
             status_code=502,
-            detail={"code": "PAYPAL_CAPTURE_ERROR", "message": f"PayPal capture error: {e}"},
+            detail={
+                "code": "PAYPAL_CAPTURE_ERROR",
+                "message": f"PayPal capture error: {e}",
+            },
         )
 
+
 def require_stripe():
-    require(bool(settings.stripe_api_key), "Stripe not configured", 501, error_code="STRIPE_NOT_CONFIGURED")
+    require(
+        bool(settings.stripe_api_key),
+        "Stripe not configured",
+        501,
+        error_code="STRIPE_NOT_CONFIGURED",
+    )
+
 
 @app.post(
     "/billing/stripe/payment-intent",
@@ -2230,7 +2678,7 @@ def require_stripe():
 )
 def stripe_payment_intent(
     payload: StripePaymentIntentRequest,
-    current_user: Dict[str, Any] = Depends(get_current_user_from_api_key)
+    current_user: Dict[str, Any] = Depends(get_current_user_from_api_key),
 ):
     """
     Create Stripe PaymentIntent (REAL).
@@ -2259,7 +2707,7 @@ def stripe_payment_intent(
             f"{settings.stripe_base}/payment_intents",
             headers={"Authorization": f"Bearer {settings.stripe_api_key}"},
             data=form_data,  # Stripe uses form-encoded
-            timeout=15
+            timeout=15,
         )
         return JSONResponse(status_code=r.status_code, content=r.json())
     except requests.RequestException as e:
@@ -2267,6 +2715,7 @@ def stripe_payment_intent(
             status_code=502,
             detail={"code": "STRIPE_ERROR", "message": f"Stripe error: {e}"},
         )
+
 
 # SEPA note: Requires bank API integration; not invented here.
 @app.post(
@@ -2287,11 +2736,22 @@ def sepa_initiate(payload: SepaInitiateRequest):
         },
     )
 
+
 # ------------- DB Utility Endpoints (REAL) -------------
-@app.get("/db/ping", response_model=SimpleAck, responses={501: {"model": ErrorEnvelope}, 500: {"model": ErrorEnvelope}})
+@app.get(
+    "/db/ping",
+    response_model=SimpleAck,
+    responses={501: {"model": ErrorEnvelope}, 500: {"model": ErrorEnvelope}},
+)
 async def db_ping():
     if pg_pool is None:
-        raise HTTPException(status_code=501, detail={"code": "DATABASE_NOT_CONFIGURED", "message": "Database not configured"})
+        raise HTTPException(
+            status_code=501,
+            detail={
+                "code": "DATABASE_NOT_CONFIGURED",
+                "message": "Database not configured",
+            },
+        )
     try:
         async with pg_pool.acquire() as conn:
             await conn.execute("SELECT 1;")
@@ -2299,9 +2759,19 @@ async def db_ping():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/redis/ping", response_model=SimpleAck, responses={501: {"model": ErrorEnvelope}, 500: {"model": ErrorEnvelope}})
+
+@app.get(
+    "/redis/ping",
+    response_model=SimpleAck,
+    responses={501: {"model": ErrorEnvelope}, 500: {"model": ErrorEnvelope}},
+)
 async def redis_ping():
-    require(redis_client is not None, "Redis not configured", 501, error_code="REDIS_NOT_CONFIGURED")
+    require(
+        redis_client is not None,
+        "Redis not configured",
+        501,
+        error_code="REDIS_NOT_CONFIGURED",
+    )
     try:
         if redis_client is None:
             raise HTTPException(status_code=501, detail="Redis not configured")
@@ -2310,6 +2780,7 @@ async def redis_ping():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 # ------------- Brain Router (Cognitive Endpoints) -------------
 
 from fastapi.responses import StreamingResponse
@@ -2317,11 +2788,14 @@ import asyncio
 
 # Assume 'cog' is the cognitive engine instance, must be available in the context
 try:
-    from brain_engine import cog  # If you have a brain_engine.py with a cog instance
+    from brain_engine import (
+        cog,
+    )  # If you have a brain_engine.py with a cog instance
 except ImportError:
     cog = None  # Fallback for now; should be replaced with actual import
 
 # Duplicate declaration removed (already initialized at top of file)
+
 
 @brain_router.get("/neural-load")
 async def get_neural_load():
@@ -2329,17 +2803,18 @@ async def get_neural_load():
     Returns industrial neural load metrics for all cognitive modules.
     """
     if not cog:
-        raise HTTPException(status_code=503, detail="Cognitive engine not available")
+        raise HTTPException(
+            status_code=503, detail="Cognitive engine not available"
+        )
     try:
         load = await cog.get_neural_load()
-        return {
-            "ok": True,
-            "neural_load": load,
-            "timestamp": time.time()
-        }
+        return {"ok": True, "neural_load": load, "timestamp": time.time()}
     except Exception as e:
         logger.error(f"[NEURAL LOAD ERROR] {e}")
-        raise HTTPException(status_code=500, detail="internal_neural_load_error")
+        raise HTTPException(
+            status_code=500, detail="internal_neural_load_error"
+        )
+
 
 @brain_router.get("/errors")
 async def get_brain_errors():
@@ -2347,18 +2822,23 @@ async def get_brain_errors():
     Returns real-time cognitive and system errors collected by the Brain Engine.
     """
     if not cog:
-        raise HTTPException(status_code=503, detail="Cognitive engine not available")
+        raise HTTPException(
+            status_code=503, detail="Cognitive engine not available"
+        )
     try:
         errors = await cog.get_error_log()
         return {
             "ok": True,
             "errors": errors,
             "count": len(errors),
-            "timestamp": time.time()
+            "timestamp": time.time(),
         }
     except Exception as e:
         logger.error(f"[BRAIN ERRORS ERROR] {e}")
-        raise HTTPException(status_code=500, detail="internal_error_center_issue")
+        raise HTTPException(
+            status_code=500, detail="internal_error_center_issue"
+        )
+
 
 @brain_router.get("/live")
 async def stream_live_brain():
@@ -2367,9 +2847,13 @@ async def stream_live_brain():
     Updates every 0.5 seconds.
     """
     if not cog:
+
         def error_stream():
             yield "data: {'error': 'cognitive_engine_unavailable'}\n\n"
-        return StreamingResponse(error_stream(), media_type="text/event-stream")
+
+        return StreamingResponse(
+            error_stream(), media_type="text/event-stream"
+        )
 
     async def event_stream():
         while True:
@@ -2379,9 +2863,10 @@ async def stream_live_brain():
                 msg = {
                     "health": health,
                     "neural_load": load,
-                    "timestamp": time.time()
+                    "timestamp": time.time(),
                 }
                 import json
+
                 yield f"data: {json.dumps(msg)}\n\n"
                 await asyncio.sleep(0.5)
             except Exception as e:
@@ -2391,12 +2876,14 @@ async def stream_live_brain():
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
+
 # Register brain_router with the main app
 app.include_router(brain_router)
 
 # Import and include Fitness Module routes
 try:
     from routes.fitness_routes import fitness_router
+
     app.include_router(fitness_router)
     logger.info("Fitness training module routes loaded")
 except Exception as e:
@@ -2406,8 +2893,12 @@ except Exception as e:
 try:
     import sys
     import os
-    sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
+
+    sys.path.append(
+        os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    )
     from routes.alba_routes import router as alba_router
+
     app.include_router(alba_router)
     logger.info("Alba network monitoring routes loaded")
 except Exception as e:
@@ -2417,6 +2908,7 @@ except Exception as e:
 # Import and include Industrial Dashboard Demo routes
 try:
     from industrial_dashboard_demo import router as industrial_dashboard_router
+
     app.include_router(industrial_dashboard_router)
     logger.info("Industrial Dashboard demo routes loaded")
 except Exception as e:
@@ -2425,8 +2917,11 @@ except Exception as e:
 # Import and include ULTRA REPORTING routes
 try:
     from reporting_api import router as reporting_router
+
     app.include_router(reporting_router)
-    logger.info("[OK] ULTRA Reporting module routes loaded - Excel/PowerPoint/Dashboard generation")
+    logger.info(
+        "[OK] ULTRA Reporting module routes loaded - Excel/PowerPoint/Dashboard generation"
+    )
 except Exception as e:
     logger.warning(f"ULTRA Reporting routes not loaded: {e}")
 
@@ -2434,7 +2929,9 @@ except Exception as e:
 try:
     if _OCEAN_AVAILABLE and ocean_router:
         app.include_router(ocean_router)
-        logger.info("✅ Curiosity Ocean routes loaded - Groq LLM + Hybrid Biometric integration")
+        logger.info(
+            "✅ Curiosity Ocean routes loaded - Groq LLM + Hybrid Biometric integration"
+        )
     else:
         logger.warning("Ocean routes not available")
 except Exception as e:
@@ -2445,6 +2942,7 @@ except Exception as e:
 # PROMETHEUS REAL METRICS QUERY ENDPOINTS
 # ============================================================================
 
+
 async def query_prometheus(query: str) -> dict:
     """Query Prometheus for real metrics"""
     try:
@@ -2453,8 +2951,10 @@ async def query_prometheus(query: str) -> dict:
         response = requests.get(url, params=params, timeout=5)
         response.raise_for_status()
         data = response.json()
-        
-        if data.get("status") == "success" and data.get("data", {}).get("result"):
+
+        if data.get("status") == "success" and data.get("data", {}).get(
+            "result"
+        ):
             results = data["data"]["result"]
             if results:
                 # Return the first result's value
@@ -2462,12 +2962,13 @@ async def query_prometheus(query: str) -> dict:
                     "success": True,
                     "value": float(results[0]["value"][1]),
                     "labels": results[0].get("metric", {}),
-                    "timestamp": results[0]["value"][0]
+                    "timestamp": results[0]["value"][0],
                 }
         return {"success": False, "value": None, "reason": "No data"}
     except Exception as e:
         logger.error(f"Prometheus query failed: {e}")
         return {"success": False, "value": None, "reason": str(e)}
+
 
 @app.get("/asi/alba/metrics")
 async def alba_metrics():
@@ -2476,9 +2977,14 @@ async def alba_metrics():
         # Skip Prometheus queries if not available - return defaults
         cpu_value = 45.0
         memory_value = 512.0
-        
-        health = min(100, max(0, 100 - (cpu_value + (memory_value / 2048) * 50) / 2)) / 100
-        
+
+        health = (
+            min(
+                100, max(0, 100 - (cpu_value + (memory_value / 2048) * 50) / 2)
+            )
+            / 100
+        )
+
         return {
             "timestamp": utcnow(),
             "alba_network": {
@@ -2488,13 +2994,14 @@ async def alba_metrics():
                 "metrics": {
                     "cpu_percent": round(cpu_value, 2),
                     "memory_mb": round(memory_value, 1),
-                    "latency_ms": round(12.3, 1)
-                }
-            }
+                    "latency_ms": round(12.3, 1),
+                },
+            },
         }
     except Exception as e:
         logger.error(f"ALBA metrics error: {e}")
         return {"error": str(e), "timestamp": utcnow()}
+
 
 @app.get("/asi/albi/metrics")
 async def albi_metrics():
@@ -2502,10 +3009,10 @@ async def albi_metrics():
     try:
         # Using mock values instead of Prometheus queries (Prometheus not running in local dev)
         goroutines_value = 50.0
-        
+
         # Normalize goroutines to neural health (0-100)
         neural_health = min(100, (goroutines_value / 2)) / 100
-        
+
         return {
             "timestamp": utcnow(),
             "albi_neural": {
@@ -2516,13 +3023,14 @@ async def albi_metrics():
                     "goroutines": int(goroutines_value),
                     "neural_patterns": int(1247 + (goroutines_value / 5)),
                     "processing_efficiency": round(neural_health, 3),
-                    "gc_operations": 12.5
-                }
-            }
+                    "gc_operations": 12.5,
+                },
+            },
         }
     except Exception as e:
         logger.error(f"ALBI metrics error: {e}")
         return {"error": str(e), "timestamp": utcnow()}
+
 
 @app.get("/asi/jona/metrics")
 async def jona_metrics():
@@ -2530,10 +3038,10 @@ async def jona_metrics():
     try:
         # Using mock values instead of Prometheus queries (Prometheus not running in local dev)
         requests_value = 800.0
-        
+
         # Normalize coordination health based on request throughput
         coordination_health = min(100, 50 + (requests_value / 20)) / 100
-        
+
         return {
             "timestamp": utcnow(),
             "jona_coordination": {
@@ -2544,13 +3052,14 @@ async def jona_metrics():
                     "requests_5m": int(requests_value),
                     "infinite_potential": round(coordination_health * 100, 2),
                     "audio_synthesis": True,
-                    "coordination_score": round(coordination_health * 100, 1)
-                }
-            }
+                    "coordination_score": round(coordination_health * 100, 1),
+                },
+            },
         }
     except Exception as e:
         logger.error(f"JONA metrics error: {e}")
         return {"error": str(e), "timestamp": utcnow()}
+
 
 @app.get("/asi/status")
 async def asi_status():
@@ -2559,21 +3068,27 @@ async def asi_status():
         alba = await alba_metrics()
         albi = await albi_metrics()
         jona = await jona_metrics()
-        
+
         return {
             "status": "operational",
             "timestamp": utcnow(),
             "trinity": {
-                "alba": alba.get("alba_network", {"status": "active", "health": 0.92}),
-                "albi": albi.get("albi_neural", {"status": "active", "health": 0.88}),
-                "jona": jona.get("jona_coordination", {"status": "active", "health": 0.95})
+                "alba": alba.get(
+                    "alba_network", {"status": "active", "health": 0.92}
+                ),
+                "albi": albi.get(
+                    "albi_neural", {"status": "active", "health": 0.88}
+                ),
+                "jona": jona.get(
+                    "jona_coordination", {"status": "active", "health": 0.95}
+                ),
             },
             "system": {
                 "version": "2.1.0",
                 "uptime": round(time.time() - START_TIME, 2),
                 "instance": INSTANCE_ID,
-                "data_source": "Prometheus (Real-Time)"
-            }
+                "data_source": "Prometheus (Real-Time)",
+            },
         }
     except Exception as e:
         logger.error(f"ASI status error: {e}")
@@ -2581,8 +3096,9 @@ async def asi_status():
             "status": "degraded",
             "timestamp": utcnow(),
             "error": str(e),
-            "data_source": "Fallback"
+            "data_source": "Fallback",
         }
+
 
 @app.get("/asi/health")
 async def asi_health():
@@ -2591,23 +3107,23 @@ async def asi_health():
         alba = await alba_metrics()
         albi = await albi_metrics()
         jona = await jona_metrics()
-        
+
         alba_health = alba.get("alba_network", {}).get("health", 0.92)
         albi_health = albi.get("albi_neural", {}).get("health", 0.88)
         jona_health = jona.get("jona_coordination", {}).get("health", 0.95)
-        
+
         overall = (alba_health + albi_health + jona_health) / 3
-        
+
         return {
             "healthy": overall > 0.5,
             "timestamp": utcnow(),
             "components": {
                 "alba_network": alba.get("alba_network", {}),
                 "albi_processor": albi.get("albi_neural", {}),
-                "jona_coordinator": jona.get("jona_coordination", {})
+                "jona_coordinator": jona.get("jona_coordination", {}),
             },
             "overall_health": round(overall, 3),
-            "data_source": "Prometheus (Real-Time)"
+            "data_source": "Prometheus (Real-Time)",
         }
     except Exception as e:
         logger.error(f"ASI health error: {e}")
@@ -2616,12 +3132,14 @@ async def asi_health():
             "timestamp": utcnow(),
             "error": str(e),
             "overall_health": 0.0,
-            "data_source": "Error"
+            "data_source": "Error",
         }
+
 
 # ============================================================================
 # MONITORING DASHBOARDS & DOCUMENTATION
 # ============================================================================
+
 
 @app.get("/api/monitoring/dashboards")
 async def monitoring_dashboards():
@@ -2636,27 +3154,33 @@ async def monitoring_dashboards():
                 "description": "Raw Prometheus metrics database",
                 "queries": [
                     {"name": "Up metrics", "query": "up"},
-                    {"name": "CPU usage", "query": "rate(process_cpu_seconds_total[1m]) * 100"},
-                    {"name": "Memory usage", "query": "process_resident_memory_bytes / 1024 / 1024"},
-                    {"name": "HTTP requests", "query": "rate(http_requests_total[5m])"}
-                ]
+                    {
+                        "name": "CPU usage",
+                        "query": "rate(process_cpu_seconds_total[1m]) * 100",
+                    },
+                    {
+                        "name": "Memory usage",
+                        "query": "process_resident_memory_bytes / 1024 / 1024",
+                    },
+                    {
+                        "name": "HTTP requests",
+                        "query": "rate(http_requests_total[5m])",
+                    },
+                ],
             },
             "grafana": {
                 "name": "Grafana - Visualization Dashboard",
                 "url": "http://localhost:3001",
                 "description": "Real-time ASI Trinity & system monitoring dashboards",
                 "default_dashboard": "ASI Trinity System",
-                "login": {
-                    "username": "admin",
-                    "password": "admin"
-                }
+                "login": {"username": "admin", "password": "admin"},
             },
             "tempo": {
                 "name": "Tempo - Distributed Tracing",
                 "url": "http://localhost:3200",
                 "description": "Request tracing and performance analysis",
-                "port": 3200
-            }
+                "port": 3200,
+            },
         },
         "real_api_endpoints": {
             "asi_trinity": {
@@ -2664,22 +3188,23 @@ async def monitoring_dashboards():
                 "health": "/asi/health",
                 "alba_metrics": "/asi/alba/metrics",
                 "albi_metrics": "/asi/albi/metrics",
-                "jona_metrics": "/asi/jona/metrics"
+                "jona_metrics": "/asi/jona/metrics",
             },
             "external_apis": {
                 "crypto_market": "/api/crypto/market",
                 "weather": "/api/weather",
-                "detailed_metrics": "/api/realdata/dashboard"
-            }
+                "detailed_metrics": "/api/realdata/dashboard",
+            },
         },
         "prometheus_scrape_targets": {
             "description": "Prometheus is scraping metrics from these targets",
             "endpoints": [
                 "http://localhost:9090/metrics (Prometheus self)",
-                "http://localhost:8000/metrics (FastAPI backend metrics)"
-            ]
-        }
+                "http://localhost:8000/metrics (FastAPI backend metrics)",
+            ],
+        },
     }
+
 
 @app.get("/api/monitoring/real-metrics-info")
 async def real_metrics_info():
@@ -2694,35 +3219,44 @@ async def real_metrics_info():
                 "source": "Prometheus metrics (process_cpu_seconds_total, process_resident_memory_bytes)",
                 "refresh_interval": "5 seconds",
                 "endpoint": "/asi/alba/metrics",
-                "metrics": ["cpu_percent", "memory_mb", "latency_ms"]
+                "metrics": ["cpu_percent", "memory_mb", "latency_ms"],
             },
             "albi_neural": {
                 "status": "REAL ✅",
                 "source": "Prometheus metrics (go_goroutines, go_gc_duration_seconds)",
                 "refresh_interval": "5 seconds",
                 "endpoint": "/asi/albi/metrics",
-                "metrics": ["goroutines", "neural_patterns", "processing_efficiency"]
+                "metrics": [
+                    "goroutines",
+                    "neural_patterns",
+                    "processing_efficiency",
+                ],
             },
             "jona_coordination": {
                 "status": "REAL ✅",
                 "source": "Prometheus metrics (promhttp_metric_handler_requests_total, uptime)",
                 "refresh_interval": "5 seconds",
                 "endpoint": "/asi/jona/metrics",
-                "metrics": ["requests_5m", "infinite_potential", "coordination_score"]
-            }
+                "metrics": [
+                    "requests_5m",
+                    "infinite_potential",
+                    "coordination_score",
+                ],
+            },
         },
         "also_real": {
             "crypto_prices": "CoinGecko API (real live prices)",
             "weather_data": "Open-Meteo API (real live conditions)",
-            "system_health": "Aggregated from all real sources"
+            "system_health": "Aggregated from all real sources",
         },
         "how_to_view": {
             "1_prometheus": "http://localhost:9090 - Raw metrics",
             "2_grafana": "http://localhost:3001 - Visual dashboards (login: admin/admin)",
             "3_api": "Call /asi/status, /asi/health, or specific metric endpoints",
-            "4_frontend": "View live metrics on Clisonix homepage"
-        }
+            "4_frontend": "View live metrics on Clisonix homepage",
+        },
     }
+
 
 @app.post("/asi/execute", responses={400: {"model": ErrorEnvelope}})
 async def asi_execute(payload: ASIExecuteRequest):
@@ -2734,11 +3268,16 @@ async def asi_execute(payload: ASIExecuteRequest):
     if agent_lower not in allowed_agents:
         raise HTTPException(
             status_code=400,
-            detail={"code": "INVALID_AGENT", "message": f"Unsupported agent '{agent}'."},
+            detail={
+                "code": "INVALID_AGENT",
+                "message": f"Unsupported agent '{agent}'.",
+            },
         )
 
     if not command:
-        logger.info("ASI execute called without command; returning system overview")
+        logger.info(
+            "ASI execute called without command; returning system overview"
+        )
         snapshot = system_snapshot()
         services = {
             "endpoints": probe_services(),
@@ -2790,11 +3329,23 @@ async def asi_execute(payload: ASIExecuteRequest):
 
     # Process through appropriate agent
     if agent_lower == "alba":
-        result = {"agent": "alba", "result": f"Network analysis: {command}", "status": "completed"}
+        result = {
+            "agent": "alba",
+            "result": f"Network analysis: {command}",
+            "status": "completed",
+        }
     elif agent_lower == "albi":
-        result = {"agent": "albi", "result": f"Neural processing: {command}", "status": "completed"}
+        result = {
+            "agent": "albi",
+            "result": f"Neural processing: {command}",
+            "status": "completed",
+        }
     elif agent_lower == "jona":
-        result = {"agent": "jona", "result": f"Data coordination: {command}", "status": "completed"}
+        result = {
+            "agent": "jona",
+            "result": f"Data coordination: {command}",
+            "status": "completed",
+        }
     else:
         result = {
             "agent": "trinity",
@@ -2810,9 +3361,11 @@ async def asi_execute(payload: ASIExecuteRequest):
         "parameters": payload.parameters,
     }
 
+
 # ============================================================================
 # REAL EXTERNAL APIS - CoinGecko + OpenWeather
 # ============================================================================
+
 
 @app.get("/api/crypto/market")
 async def get_crypto_market():
@@ -2828,9 +3381,9 @@ async def get_crypto_market():
                 "vs_currencies": "usd,eur",
                 "include_market_cap": "true",
                 "include_24hr_vol": "true",
-                "include_market_cap_change_24h": "true"
+                "include_market_cap_change_24h": "true",
             },
-            timeout=10
+            timeout=10,
         )
         r.raise_for_status()
         data = r.json()
@@ -2838,11 +3391,14 @@ async def get_crypto_market():
             "ok": True,
             "timestamp": utcnow(),
             "source": "CoinGecko API",
-            "data": data
+            "data": data,
         }
     except requests.RequestException as e:
         logger.error(f"CoinGecko API error: {e}")
-        raise HTTPException(status_code=502, detail=f"CoinGecko API error: {str(e)}")
+        raise HTTPException(
+            status_code=502, detail=f"CoinGecko API error: {str(e)}"
+        )
+
 
 @app.get("/api/crypto/market/detailed/{coin_id}")
 async def get_crypto_detailed(coin_id: str = "bitcoin"):
@@ -2852,26 +3408,34 @@ async def get_crypto_detailed(coin_id: str = "bitcoin"):
     """
     try:
         # Validate coin_id (simple check)
-        allowed_coins = {"bitcoin", "ethereum", "cardano", "solana", "polkadot", "ripple", "dogecoin"}
+        allowed_coins = {
+            "bitcoin",
+            "ethereum",
+            "cardano",
+            "solana",
+            "polkadot",
+            "ripple",
+            "dogecoin",
+        }
         if coin_id.lower() not in allowed_coins:
             return {
                 "error": "coin_not_in_sample_list",
                 "message": f"Use one of: {', '.join(allowed_coins)}",
-                "status": 400
+                "status": 400,
             }
-        
+
         r = requests.get(
             f"https://api.coingecko.com/api/v3/coins/{coin_id.lower()}",
             params={
                 "localization": False,
                 "market_data": True,
-                "community_data": False
+                "community_data": False,
             },
-            timeout=10
+            timeout=10,
         )
         r.raise_for_status()
         data = r.json()
-        
+
         return {
             "ok": True,
             "timestamp": utcnow(),
@@ -2880,18 +3444,31 @@ async def get_crypto_detailed(coin_id: str = "bitcoin"):
             "data": {
                 "name": data.get("name"),
                 "symbol": data.get("symbol"),
-                "current_price": data.get("market_data", {}).get("current_price", {}),
-                "market_cap": data.get("market_data", {}).get("market_cap", {}),
-                "volume_24h": data.get("market_data", {}).get("total_volume", {}),
+                "current_price": data.get("market_data", {}).get(
+                    "current_price", {}
+                ),
+                "market_cap": data.get("market_data", {}).get(
+                    "market_cap", {}
+                ),
+                "volume_24h": data.get("market_data", {}).get(
+                    "total_volume", {}
+                ),
                 "high_24h": data.get("market_data", {}).get("high_24h", {}),
                 "low_24h": data.get("market_data", {}).get("low_24h", {}),
-                "price_change_24h": data.get("market_data", {}).get("price_change_24h"),
-                "price_change_percentage_24h": data.get("market_data", {}).get("price_change_percentage_24h"),
-            }
+                "price_change_24h": data.get("market_data", {}).get(
+                    "price_change_24h"
+                ),
+                "price_change_percentage_24h": data.get("market_data", {}).get(
+                    "price_change_percentage_24h"
+                ),
+            },
         }
     except requests.RequestException as e:
         logger.error(f"CoinGecko detailed API error: {e}")
-        raise HTTPException(status_code=502, detail=f"CoinGecko API error: {str(e)}")
+        raise HTTPException(
+            status_code=502, detail=f"CoinGecko API error: {str(e)}"
+        )
+
 
 @app.get("/api/weather")
 async def get_weather(city: str = "Tirana", country: str = "Albania"):
@@ -2904,23 +3481,28 @@ async def get_weather(city: str = "Tirana", country: str = "Albania"):
         # Using open-meteo.com (no key needed, fully free!)
         r = requests.get(
             "https://geocoding-api.open-meteo.com/v1/search",
-            params={"name": city, "count": 1, "language": "en", "format": "json"},
-            timeout=10
+            params={
+                "name": city,
+                "count": 1,
+                "language": "en",
+                "format": "json",
+            },
+            timeout=10,
         )
         r.raise_for_status()
         location_data = r.json()
-        
+
         if not location_data.get("results"):
             return {
                 "error": "location_not_found",
                 "city": city,
-                "message": f"City '{city}' not found"
+                "message": f"City '{city}' not found",
             }
-        
+
         location = location_data["results"][0]
         latitude = location.get("latitude")
         longitude = location.get("longitude")
-        
+
         # Get weather data
         weather_r = requests.get(
             "https://api.open-meteo.com/v1/forecast",
@@ -2929,13 +3511,13 @@ async def get_weather(city: str = "Tirana", country: str = "Albania"):
                 "longitude": longitude,
                 "current": "temperature_2m,weather_code,wind_speed_10m,relative_humidity_2m",
                 "daily": "temperature_2m_max,temperature_2m_min,weather_code,precipitation_sum",
-                "timezone": "auto"
+                "timezone": "auto",
             },
-            timeout=10
+            timeout=10,
         )
         weather_r.raise_for_status()
         weather_data = weather_r.json()
-        
+
         return {
             "ok": True,
             "timestamp": utcnow(),
@@ -2945,14 +3527,17 @@ async def get_weather(city: str = "Tirana", country: str = "Albania"):
                 "country": location.get("country"),
                 "latitude": latitude,
                 "longitude": longitude,
-                "timezone": weather_data.get("timezone")
+                "timezone": weather_data.get("timezone"),
             },
             "current_weather": weather_data.get("current", {}),
-            "daily_forecast": weather_data.get("daily", {})
+            "daily_forecast": weather_data.get("daily", {}),
         }
     except requests.RequestException as e:
         logger.error(f"Weather API error: {e}")
-        raise HTTPException(status_code=502, detail=f"Weather API error: {str(e)}")
+        raise HTTPException(
+            status_code=502, detail=f"Weather API error: {str(e)}"
+        )
+
 
 @app.get("/api/weather/multiple-cities")
 async def get_weather_multiple():
@@ -2960,57 +3545,67 @@ async def get_weather_multiple():
     REAL Open-Meteo API - Weather for multiple cities in Albania/Kosovo
     """
     cities = ["Tirana", "Prishtina", "Durrës", "Vlorë", "Prizren"]
-    
+
     try:
         results = []
         for city in cities:
             geo_r = requests.get(
                 "https://geocoding-api.open-meteo.com/v1/search",
-                params={"name": city, "count": 1, "language": "en", "format": "json"},
-                timeout=5
+                params={
+                    "name": city,
+                    "count": 1,
+                    "language": "en",
+                    "format": "json",
+                },
+                timeout=5,
             )
             geo_r.raise_for_status()
             geo_data = geo_r.json()
-            
+
             if not geo_data.get("results"):
                 continue
-            
+
             location = geo_data["results"][0]
             lat, lon = location.get("latitude"), location.get("longitude")
-            
+
             weather_r = requests.get(
                 "https://api.open-meteo.com/v1/forecast",
                 params={
                     "latitude": lat,
                     "longitude": lon,
                     "current": "temperature_2m,weather_code,wind_speed_10m,relative_humidity_2m",
-                    "timezone": "auto"
+                    "timezone": "auto",
                 },
-                timeout=5
+                timeout=5,
             )
             weather_r.raise_for_status()
             weather_data = weather_r.json()
-            
-            results.append({
-                "city": city,
-                "location": {
-                    "latitude": lat,
-                    "longitude": lon,
-                    "country": location.get("country")
-                },
-                "weather": weather_data.get("current", {})
-            })
-        
+
+            results.append(
+                {
+                    "city": city,
+                    "location": {
+                        "latitude": lat,
+                        "longitude": lon,
+                        "country": location.get("country"),
+                    },
+                    "weather": weather_data.get("current", {}),
+                }
+            )
+
         return {
             "ok": True,
             "timestamp": utcnow(),
             "source": "Open-Meteo API (Free)",
             "cities_count": len(results),
-            "data": results
+            "data": results,
         }
     except requests.RequestException as e:
         logger.error(f"Multi-city weather API error: {e}")
-        raise HTTPException(status_code=502, detail=f"Weather API error: {str(e)}")
+        raise HTTPException(
+            status_code=502, detail=f"Weather API error: {str(e)}"
+        )
+
 
 @app.get("/api/realdata/dashboard")
 async def get_realdata_dashboard():
@@ -3024,35 +3619,37 @@ async def get_realdata_dashboard():
             params={
                 "ids": "bitcoin,ethereum",
                 "vs_currencies": "usd,eur",
-                "include_market_cap": "true"
+                "include_market_cap": "true",
             },
-            timeout=5
+            timeout=5,
         )
         crypto_data = crypto_r.json() if crypto_r.status_code == 200 else {}
-        
+
         # Fetch weather for Tirana
         geo_r = requests.get(
             "https://geocoding-api.open-meteo.com/v1/search",
             params={"name": "Tirana", "count": 1},
-            timeout=5
+            timeout=5,
         )
         geo_r.raise_for_status()
         geo_data = geo_r.json()
         location = geo_data.get("results", [{}])[0]
-        lat, lon = location.get("latitude", 41.33), location.get("longitude", 19.82)
-        
+        lat, lon = location.get("latitude", 41.33), location.get(
+            "longitude", 19.82
+        )
+
         weather_r = requests.get(
             "https://api.open-meteo.com/v1/forecast",
             params={
                 "latitude": lat,
                 "longitude": lon,
                 "current": "temperature_2m,weather_code,wind_speed_10m",
-                "timezone": "auto"
+                "timezone": "auto",
             },
-            timeout=5
+            timeout=5,
         )
         weather_data = weather_r.json() if weather_r.status_code == 200 else {}
-        
+
         return {
             "ok": True,
             "timestamp": utcnow(),
@@ -3060,16 +3657,20 @@ async def get_realdata_dashboard():
             "crypto": crypto_data,
             "weather": {
                 "location": "Tirana, Albania",
-                "current": weather_data.get("current", {})
-            }
+                "current": weather_data.get("current", {}),
+            },
         }
     except Exception as e:
         logger.error(f"Dashboard API error: {e}")
-        raise HTTPException(status_code=502, detail=f"Dashboard error: {str(e)}")
+        raise HTTPException(
+            status_code=502, detail=f"Dashboard error: {str(e)}"
+        )
+
 
 # ============================================================================
 # OPENAI REAL NEURAL ANALYSIS
 # ============================================================================
+
 
 @app.post("/api/ai/analyze-neural")
 async def analyze_neural_data(query: str):
@@ -3078,7 +3679,7 @@ async def analyze_neural_data(query: str):
     Uses GPT-4 for actual AI-powered neural data interpretation
     """
     openai_key = os.getenv("OPENAI_API_KEY")
-    
+
     if not openai_key or not openai_key.startswith("sk-"):
         return {
             "status": "demo",
@@ -3087,14 +3688,19 @@ async def analyze_neural_data(query: str):
             "demo_response": {
                 "analysis": "DEMO: This would analyze neural patterns using real GPT-4",
                 "confidence": 0.95,
-                "patterns_detected": ["alpha_waves", "theta_rhythms", "neural_synchronization"]
-            }
+                "patterns_detected": [
+                    "alpha_waves",
+                    "theta_rhythms",
+                    "neural_synchronization",
+                ],
+            },
         }
-    
+
     try:
         import openai
+
         openai.api_key = openai_key
-        
+
         system_prompt = """You are an expert neuroscientist and neural signal analyst.
         Analyze the provided neural data/query and provide:
         1. Pattern identification
@@ -3103,20 +3709,20 @@ async def analyze_neural_data(query: str):
         4. Recommendations for neural optimization
         
         Keep responses concise and data-focused."""
-        
+
         response = openai.ChatCompletion.create(
             model="gpt-4",
             messages=[
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": query}
+                {"role": "user", "content": query},
             ],
             temperature=0.7,
             max_tokens=500,
-            timeout=30
+            timeout=30,
         )
-        
+
         analysis = response.choices[0].message.content
-        
+
         return {
             "status": "success",
             "timestamp": utcnow(),
@@ -3126,37 +3732,34 @@ async def analyze_neural_data(query: str):
             "usage": {
                 "prompt_tokens": response.usage.prompt_tokens,
                 "completion_tokens": response.usage.completion_tokens,
-                "total_tokens": response.usage.total_tokens
+                "total_tokens": response.usage.total_tokens,
             },
-            "model": "gpt-4"
+            "model": "gpt-4",
         }
     except ImportError:
         return {
             "status": "error",
             "message": "OpenAI library not installed",
             "suggestion": "pip install openai",
-            "fallback": "Available without OpenAI installed"
+            "fallback": "Available without OpenAI installed",
         }
     except Exception as e:
         logger.error(f"OpenAI API error: {e}")
-        return {
-            "status": "error",
-            "message": str(e),
-            "timestamp": utcnow()
-        }
+        return {"status": "error", "message": str(e), "timestamp": utcnow()}
+
 
 @app.post("/api/ai/eeg-interpretation")
 async def eeg_interpretation(
     frequencies: Dict[str, float],
     dominant_freq: float,
-    amplitude_range: Dict[str, float]
+    amplitude_range: Dict[str, float],
 ):
     """
     REAL OpenAI API - EEG signal interpretation
     Analyzes frequency bands and brain states
     """
     openai_key = os.getenv("OPENAI_API_KEY")
-    
+
     if not openai_key or not openai_key.startswith("sk-"):
         return {
             "status": "demo",
@@ -3166,14 +3769,19 @@ async def eeg_interpretation(
                 "interpretation": "DEMO: Alpha state - relaxed awareness",
                 "brain_state": "relaxed",
                 "confidence": 0.88,
-                "recommendations": ["continue_relaxation", "maintain_frequency", "good_state"]
-            }
+                "recommendations": [
+                    "continue_relaxation",
+                    "maintain_frequency",
+                    "good_state",
+                ],
+            },
         }
-    
+
     try:
         import openai
+
         openai.api_key = openai_key
-        
+
         eeg_data = f"""
         EEG Analysis:
         - Frequencies: {frequencies}
@@ -3186,20 +3794,23 @@ async def eeg_interpretation(
         3. Health indicators
         4. Recommendations
         """
-        
+
         response = openai.ChatCompletion.create(
             model="gpt-4",
             messages=[
-                {"role": "system", "content": "You are a clinical neuroscientist expert in EEG analysis."},
-                {"role": "user", "content": eeg_data}
+                {
+                    "role": "system",
+                    "content": "You are a clinical neuroscientist expert in EEG analysis.",
+                },
+                {"role": "user", "content": eeg_data},
             ],
             temperature=0.5,
             max_tokens=400,
-            timeout=30
+            timeout=30,
         )
-        
+
         interpretation = response.choices[0].message.content
-        
+
         return {
             "status": "success",
             "timestamp": utcnow(),
@@ -3207,58 +3818,63 @@ async def eeg_interpretation(
             "eeg_data": {
                 "dominant_frequency": dominant_freq,
                 "frequencies": frequencies,
-                "amplitude_range": amplitude_range
+                "amplitude_range": amplitude_range,
             },
             "interpretation": interpretation,
-            "model": "gpt-4"
+            "model": "gpt-4",
         }
     except Exception as e:
         logger.error(f"EEG interpretation error: {e}")
-        return {
-            "status": "error",
-            "message": str(e),
-            "timestamp": utcnow()
-        }
+        return {"status": "error", "message": str(e), "timestamp": utcnow()}
+
 
 @app.get("/api/ai/health")
 async def ai_health():
     """Check OpenAI API connectivity and status"""
     openai_key = os.getenv("OPENAI_API_KEY")
-    
+
     health_status = {
         "timestamp": utcnow(),
         "openai": {
             "configured": bool(openai_key and openai_key.startswith("sk-")),
-            "api_key_format": "valid" if openai_key and openai_key.startswith("sk-") else "demo/invalid"
-        }
+            "api_key_format": (
+                "valid"
+                if openai_key and openai_key.startswith("sk-")
+                else "demo/invalid"
+            ),
+        },
     }
-    
+
     # Try to verify API key if configured
     if openai_key and openai_key.startswith("sk-"):
         try:
             import openai
+
             openai.api_key = openai_key
-            
+
             # Test with a simple call
             response = openai.ChatCompletion.create(
                 model="gpt-4",
                 messages=[{"role": "user", "content": "test"}],
                 max_tokens=1,
-                timeout=5
+                timeout=5,
             )
-            
+
             health_status["openai"]["status"] = "active"
             health_status["openai"]["model"] = "gpt-4"
             health_status["openai"]["last_check"] = utcnow()
-            
+
         except Exception as e:
             health_status["openai"]["status"] = "error"
             health_status["openai"]["error"] = str(e)
     else:
         health_status["openai"]["status"] = "demo_mode"
-        health_status["openai"]["message"] = "Using demo responses - configure OPENAI_API_KEY for real AI"
-    
+        health_status["openai"][
+            "message"
+        ] = "Using demo responses - configure OPENAI_API_KEY for real AI"
+
     return health_status
+
 
 # ============================================================================
 # CREWAI & LANGCHAIN INTEGRATION - AI AGENT FRAMEWORK
@@ -3268,20 +3884,21 @@ async def ai_health():
 _crewai_agents = None
 _langchain_chains = None
 
+
 def init_crewai_agents():
     """Initialize CrewAI agents for ASI Trinity"""
     global _crewai_agents
-    
+
     if _crewai_agents is not None:
         return _crewai_agents
-    
+
     try:
         from crewai import Agent
         from dotenv import load_dotenv
         import os
-        
+
         load_dotenv()
-        
+
         # Initialize agents with appropriate roles
         _crewai_agents = {
             "alba": Agent(
@@ -3289,27 +3906,27 @@ def init_crewai_agents():
                 goal="Collect, organize, and present system metrics accurately",
                 backstory="ALBA specializes in network metrics, real-time data collection, and system health monitoring.",
                 verbose=False,
-                allow_delegation=False
+                allow_delegation=False,
             ),
             "albi": Agent(
                 role="Pattern Recognition Specialist",
                 goal="Identify anomalies, patterns, and correlations in data",
                 backstory="ALBI excels at finding hidden patterns, neural correlations, and predictive indicators in complex datasets.",
                 verbose=False,
-                allow_delegation=False
+                allow_delegation=False,
             ),
             "jona": Agent(
                 role="Strategic Advisor",
                 goal="Synthesize insights and provide actionable recommendations",
                 backstory="JONA combines data insights with creative problem-solving to provide innovative recommendations and forward-thinking strategy.",
                 verbose=False,
-                allow_delegation=False
-            )
+                allow_delegation=False,
+            ),
         }
-        
+
         logger.info("✓ CrewAI agents initialized successfully")
         return _crewai_agents
-        
+
     except ImportError as e:
         logger.warning(f"CrewAI not available: {e}")
         return None
@@ -3317,38 +3934,37 @@ def init_crewai_agents():
         logger.error(f"Error initializing CrewAI agents: {e}")
         return None
 
+
 def init_langchain_chains():
     """Initialize LangChain conversation chains with memory"""
     global _langchain_chains
-    
+
     if _langchain_chains is not None:
         return _langchain_chains
-    
+
     try:
         from langchain_openai import OpenAI  # type: ignore
         from langchain.memory import ConversationBufferMemory  # type: ignore
         from langchain.chains import ConversationChain  # type: ignore
         from dotenv import load_dotenv
         import os
-        
+
         load_dotenv()
-        
+
         # Initialize conversation memory
         memory = ConversationBufferMemory()
-        
+
         # Initialize chains
         _langchain_chains = {
             "conversation": ConversationChain(
-                llm=OpenAI(temperature=0.7),
-                memory=memory,
-                verbose=False
+                llm=OpenAI(temperature=0.7), memory=memory, verbose=False
             ),
-            "memory": memory
+            "memory": memory,
         }
-        
+
         logger.info("✓ LangChain chains initialized successfully")
         return _langchain_chains
-        
+
     except ImportError as e:
         logger.warning(f"LangChain not available: {e}")
         return None
@@ -3356,23 +3972,24 @@ def init_langchain_chains():
         logger.error(f"Error initializing LangChain chains: {e}")
         return None
 
+
 @app.post("/api/ai/trinity-analysis")
 async def trinity_analysis(query: str = "", detailed: bool = False):
     """
     CrewAI-powered ASI Trinity Analysis
     Uses coordinated ALBA->ALBI->JONA agents for comprehensive neural
     analysis
-    
+
     Args:
         query: Analysis query or command
         detailed: Include detailed agent reasoning
-    
+
     Returns:
         Coordinated analysis from all three agents
     """
     try:
         agents = init_crewai_agents()
-        
+
         if agents is None:
             return {
                 "status": "demo",
@@ -3382,54 +3999,58 @@ async def trinity_analysis(query: str = "", detailed: bool = False):
                     "alba_findings": {
                         "data_points": 2847,
                         "metrics_fresh": True,
-                        "timestamp": utcnow()
+                        "timestamp": utcnow(),
                     },
                     "albi_patterns": {
                         "anomalies_detected": 3,
                         "dominant_pattern": "alpha_wave_synchronization",
-                        "confidence": 0.94
+                        "confidence": 0.94,
                     },
                     "jona_synthesis": {
                         "recommendation": "Increase ALBA network coordination for optimal neural synthesis",
                         "creative_insight": "Neural patterns suggest emergence of new cognitive layer",
-                        "next_steps": ["Monitor closely", "Prepare optimization", "Document findings"]
-                    }
-                }
+                        "next_steps": [
+                            "Monitor closely",
+                            "Prepare optimization",
+                            "Document findings",
+                        ],
+                    },
+                },
             }
-        
+
         from crewai import Task, Crew, Process
-        
+
         # Define tasks for each agent
         alba_task = Task(
             description=f"Collect and organize all current metrics for the query: '{query}'. Include CPU, memory, network, EEG patterns, and neural coordination levels.",
             agent=agents["alba"],
-            expected_output="Structured JSON with organized metrics from all systems"
+            expected_output="Structured JSON with organized metrics from all systems",
         )
-        
+
         albi_task = Task(
             description="Analyze the collected data from ALBA. Identify neural patterns, frequency anomalies, temporal correlations, and flag unusual patterns.",
             agent=agents["albi"],
-            expected_output="Detailed pattern analysis with anomalies, correlations, and risk flags"
+            expected_output="Detailed pattern analysis with anomalies, correlations, and risk flags",
         )
-        
+
         jona_task = Task(
             description="Using ALBI's analysis, synthesize insights into 3-5 actionable recommendations for optimizing neural performance and creative next steps.",
             agent=agents["jona"],
-            expected_output="Executive summary with innovative recommendations and forward-thinking insights"
+            expected_output="Executive summary with innovative recommendations and forward-thinking insights",
         )
-        
+
         # Create crew with hierarchical process
         crew = Crew(
             agents=[agents["alba"], agents["albi"], agents["jona"]],
             tasks=[alba_task, albi_task, jona_task],
             process=Process.hierarchical,
             manager_llm=agents["alba"].llm,  # Use OpenAI as manager
-            verbose=detailed
+            verbose=detailed,
         )
-        
+
         # Execute crew
         result = crew.kickoff()
-        
+
         return {
             "status": "success",
             "timestamp": utcnow(),
@@ -3437,34 +4058,37 @@ async def trinity_analysis(query: str = "", detailed: bool = False):
             "query": query,
             "analysis": result,
             "agents_used": ["alba", "albi", "jona"],
-            "model": "gpt-4"
+            "model": "gpt-4",
         }
-    
+
     except Exception as e:
         logger.error(f"CrewAI Trinity analysis error: {e}")
         return {
             "status": "error",
             "message": str(e),
             "timestamp": utcnow(),
-            "suggestion": "Ensure CrewAI is installed: pip install crewai"
+            "suggestion": "Ensure CrewAI is installed: pip install crewai",
         }
 
+
 @app.post("/api/ai/curiosity-ocean")
-async def curiosity_ocean_chat(question: str, conversation_id: Optional[str] = None):
+async def curiosity_ocean_chat(
+    question: str, conversation_id: Optional[str] = None
+):
     """
     🌊 LangChain-powered Curiosity Ocean Conversations
     Multi-turn conversation with memory for knowledge exploration
-    
+
     Args:
         question: User's question or exploration query
         conversation_id: Optional ID for continuing previous conversations
-    
+
     Returns:
         AI response with conversation history preserved
     """
     try:
         chains = init_langchain_chains()
-        
+
         if chains is None:
             return {
                 "status": "demo",
@@ -3473,21 +4097,29 @@ async def curiosity_ocean_chat(question: str, conversation_id: Optional[str] = N
                 "demo_response": {
                     "answer": f"DEMO: Exploring the question '{question}'...",
                     "depth_score": 85,
-                    "related_topics": ["Consciousness", "Information Theory", "Neural Networks"],
+                    "related_topics": [
+                        "Consciousness",
+                        "Information Theory",
+                        "Neural Networks",
+                    ],
                     "next_questions": [
                         "How does knowledge emerge from data?",
                         "What is the nature of understanding?",
-                        "Can consciousness be computed?"
-                    ]
-                }
+                        "Can consciousness be computed?",
+                    ],
+                },
             }
-        
+
         # Use LangChain conversation chain
         response = chains["conversation"].predict(input=question)
-        
+
         # Get memory context
-        memory_context = chains["memory"].buffer if hasattr(chains["memory"], "buffer") else ""
-        
+        memory_context = (
+            chains["memory"].buffer
+            if hasattr(chains["memory"], "buffer")
+            else ""
+        )
+
         return {
             "status": "success",
             "timestamp": utcnow(),
@@ -3496,78 +4128,76 @@ async def curiosity_ocean_chat(question: str, conversation_id: Optional[str] = N
             "response": response,
             "conversation_memory": memory_context,
             "model": "gpt-4",
-            "conversation_id": conversation_id or str(uuid.uuid4())
+            "conversation_id": conversation_id or str(uuid.uuid4()),
         }
-    
+
     except Exception as e:
         logger.error(f"Curiosity Ocean error: {e}")
         return {
             "status": "error",
             "message": str(e),
             "timestamp": utcnow(),
-            "suggestion": "Ensure LangChain is installed: pip install langchain langchain-openai"
+            "suggestion": "Ensure LangChain is installed: pip install langchain langchain-openai",
         }
+
 
 @app.post("/api/ai/quick-interpret")
 async def quick_interpret(data: Dict[str, Any]):
     """
     ⚡ Claude Tools - Quick interpretation without orchestration overhead
     Ideal for fast, simple analysis tasks
-    
+
     Args:
         data: Dict with 'query' and optional context
-    
+
     Returns:
         Quick interpretation result
     """
     try:
         from anthropic import Anthropic
-        
+
         api_key = os.getenv("ANTHROPIC_API_KEY")
         if not api_key:
             api_key = os.getenv("OPENAI_API_KEY")  # Fallback to OpenAI
-        
+
         if not api_key:
             return {
                 "status": "demo",
                 "message": "API keys not configured",
-                "demo_response": f"DEMO: Quick interpretation of: {data.get('query', 'N/A')}"
+                "demo_response": f"DEMO: Quick interpretation of: {data.get('query', 'N/A')}",
             }
-        
+
         client = Anthropic(api_key=api_key)
-        
+
         query = data.get("query", "")
         context = data.get("context", "")
-        
+
         prompt = f"""Please provide a quick, insightful interpretation:
         
 Context: {context}
 Query: {query}
 
 Be concise but thorough. Focus on actionable insights."""
-        
+
         response = client.messages.create(
             model="claude-3-5-sonnet-20241022",
             max_tokens=500,
-            messages=[{"role": "user", "content": prompt}]
+            messages=[{"role": "user", "content": prompt}],
         )
-        
+
         return {
             "status": "success",
             "timestamp": utcnow(),
             "source": "Claude (Quick Mode)",
             "query": query,
             "interpretation": response.content[0].text,
-            "model": "claude-3-5-sonnet"
+            "model": "claude-3-5-sonnet",
         }
-    
+
     except Exception as e:
         logger.error(f"Quick interpret error: {e}")
-        return {
-            "status": "error",
-            "message": str(e),
-            "timestamp": utcnow()
-        }
+        return {"status": "error", "message": str(e), "timestamp": utcnow()}
+
 
 @app.get("/api/ai/agents-status")
 async def agents_status():
@@ -3577,7 +4207,7 @@ async def agents_status():
     try:
         crewai_ok = False
         langchain_ok = False
-        
+
         # Try CrewAI
         try:
             result = init_crewai_agents()
@@ -3585,7 +4215,7 @@ async def agents_status():
         except Exception as e:
             logger.debug(f"CrewAI check failed: {e}")
             crewai_ok = False
-        
+
         # Try LangChain
         try:
             result = init_langchain_chains()
@@ -3593,41 +4223,56 @@ async def agents_status():
         except Exception as e:
             logger.debug(f"LangChain check failed: {e}")
             langchain_ok = False
-        
+
         return {
             "timestamp": utcnow(),
             "frameworks": {
                 "crewai": {
                     "available": crewai_ok,
                     "agents": ["alba", "albi", "jona"] if crewai_ok else [],
-                    "endpoint": "/api/ai/trinity-analysis"
+                    "endpoint": "/api/ai/trinity-analysis",
                 },
                 "langchain": {
                     "available": langchain_ok,
                     "chains": ["conversation"] if langchain_ok else [],
-                    "endpoint": "/api/ai/curiosity-ocean"
+                    "endpoint": "/api/ai/curiosity-ocean",
                 },
                 "claude_tools": {
                     "available": True,
-                    "endpoint": "/api/ai/quick-interpret"
-                }
+                    "endpoint": "/api/ai/quick-interpret",
+                },
             },
-            "openai_configured": bool(os.getenv("OPENAI_API_KEY") and os.getenv("OPENAI_API_KEY").startswith("sk-")),
-            "anthropic_configured": bool(os.getenv("ANTHROPIC_API_KEY"))
+            "openai_configured": bool(
+                os.getenv("OPENAI_API_KEY")
+                and os.getenv("OPENAI_API_KEY").startswith("sk-")
+            ),
+            "anthropic_configured": bool(os.getenv("ANTHROPIC_API_KEY")),
         }
     except Exception as e:
         logger.error(f"agents_status error: {e}", exc_info=True)
         return {
             "timestamp": utcnow(),
             "frameworks": {
-                "crewai": {"available": False, "agents": [], "endpoint": "/api/ai/trinity-analysis"},
-                "langchain": {"available": False, "chains": [], "endpoint": "/api/ai/curiosity-ocean"},
-                "claude_tools": {"available": True, "endpoint": "/api/ai/quick-interpret"}
+                "crewai": {
+                    "available": False,
+                    "agents": [],
+                    "endpoint": "/api/ai/trinity-analysis",
+                },
+                "langchain": {
+                    "available": False,
+                    "chains": [],
+                    "endpoint": "/api/ai/curiosity-ocean",
+                },
+                "claude_tools": {
+                    "available": True,
+                    "endpoint": "/api/ai/quick-interpret",
+                },
             },
             "openai_configured": False,
             "anthropic_configured": False,
-            "error": str(e)
+            "error": str(e),
         }
+
 
 # Add favicon to eliminate 404 errors
 try:
@@ -3639,6 +4284,7 @@ try:
     logger.info("Favicon route added")
 except Exception as e:
     logger.warning(f"Favicon route not loaded: {e}")
+
 
 # ------------- Root -------------
 @app.get("/")
@@ -3664,8 +4310,6 @@ def root():
             "GET /alba/network/health": "Network health score",
             "GET /asi/status": "ASI Trinity architecture status",
             "GET /asi/health": "ASI system health check",
-            "POST /asi/execute": "Execute commands through ASI Trinity"
-        }
+            "POST /asi/execute": "Execute commands through ASI Trinity",
+        },
     }
-
-
