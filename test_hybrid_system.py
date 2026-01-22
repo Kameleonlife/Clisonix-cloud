@@ -347,7 +347,7 @@ def test_retrieve_session(session_id):
 # ============================================================================
 
 
-def test_analytics(session_id):
+def test_analytics():
     print("\n📋 TEST 8: Analytics")
     print("-" * 70)
 
@@ -422,7 +422,7 @@ def main():
         )
 
         # Analytics
-        tests.append(("Analytics", test_analytics(session_id)))
+        tests.append(("Analytics", test_analytics()))
 
     # Summary
     print("\n" + "=" * 70)
