@@ -4,9 +4,7 @@ HYBRID BIOMETRIC SYSTEM - TEST SUITE
 Verifikimi i të gjithë komponentave
 """
 
-import asyncio
 import requests
-import json
 from datetime import datetime
 
 # API endpoints
@@ -27,14 +25,16 @@ print()
 # TEST 1: HEALTH CHECK
 # ============================================================================
 
+
 def test_health():
+    """Test API health endpoint"""
     print("📋 TEST 1: Health Check")
     print("-" * 70)
     try:
         resp = requests.get(f"{API_BASE}/health", timeout=5)
         if resp.status_code == 200:
             data = resp.json()
-            print(f"✅ API is healthy")
+            print("✅ API is healthy")
             print(f"   Status: {data.get('status')}")
             print(f"   Sessions: {data.get('sessions')}")
             print(f"   Devices: {data.get('registered_devices')}")
@@ -42,7 +42,7 @@ def test_health():
         else:
             print(f"❌ API returned {resp.status_code}")
             return False
-    except Exception as e:
+    except (requests.RequestException, ValueError) as e:
         print(f"❌ Error: {e}")
         return False
 
@@ -50,6 +50,7 @@ def test_health():
 # ============================================================================
 # TEST 2: CLINIC REGISTRATION
 # ============================================================================
+
 
 def test_clinic_registration():
     print("\n📋 TEST 2: Clinic Registration")
@@ -83,6 +84,7 @@ def test_clinic_registration():
 # ============================================================================
 # TEST 3: CLINICAL DEVICE REGISTRATION
 # ============================================================================
+
 
 def test_device_registration():
     print("\n📋 TEST 3: Clinical Device Registration")
@@ -122,13 +124,19 @@ def test_device_registration():
 
     for device in test_devices:
         try:
-            resp = requests.post(f"{CLINIC_ENDPOINT}/device/register", json=device)
+            resp = requests.post(
+                f"{CLINIC_ENDPOINT}/device/register", json=device
+            )
             if resp.status_code == 200:
                 data = resp.json()
-                print(f"✅ {device['device_type']:8} registered: {device['device_name']}")
+                print(
+                    f"✅ {device['device_type']:8} registered: {device['device_name']}"
+                )
                 devices_registered.append(device["device_id"])
             else:
-                print(f"❌ Failed to register {device['device_type']}: {resp.status_code}")
+                print(
+                    f"❌ Failed to register {device['device_type']}: {resp.status_code}"
+                )
         except Exception as e:
             print(f"❌ Error registering {device['device_type']}: {e}")
 
@@ -140,6 +148,7 @@ def test_device_registration():
 # TEST 4: START HYBRID SESSION
 # ============================================================================
 
+
 def test_start_session():
     print("\n📋 TEST 4: Start Hybrid Session")
     print("-" * 70)
@@ -150,7 +159,9 @@ def test_start_session():
             "data_source": "hybrid",
         }
 
-        resp = requests.post(f"{SESSION_ENDPOINT}/start-hybrid", json=session_data)
+        resp = requests.post(
+            f"{SESSION_ENDPOINT}/start-hybrid", json=session_data
+        )
         if resp.status_code == 200:
             data = resp.json()
             session_id = data["session"]["session_id"]
@@ -171,6 +182,7 @@ def test_start_session():
 # ============================================================================
 # TEST 5: SUBMIT PHONE SENSOR DATA
 # ============================================================================
+
 
 def test_phone_sensor_data(session_id: str):
     print("\n📋 TEST 5: Phone Sensor Data Submission")
@@ -206,7 +218,9 @@ def test_phone_sensor_data(session_id: str):
                 "user_id": "test_patient_001",
             }
 
-            resp = requests.post(f"{PHONE_ENDPOINT}/sensor-reading", json=reading_data)
+            resp = requests.post(
+                f"{PHONE_ENDPOINT}/sensor-reading", json=reading_data
+            )
             if resp.status_code == 200:
                 data = resp.json()
                 print(f"✅ Reading {i+1} submitted")
@@ -226,6 +240,7 @@ def test_phone_sensor_data(session_id: str):
 # TEST 6: SUBMIT CLINICAL DATA
 # ============================================================================
 
+
 def test_clinical_data():
     print("\n📋 TEST 6: Clinical Device Data Submission")
     print("-" * 70)
@@ -238,13 +253,30 @@ def test_clinical_data():
             "device_id": "eeg_001",
             "device_name": "Emotiv EPOC+",
             "clinic_id": "test_clinic_001",
-            "value": [50.5, 48.2, 52.1, 49.8, 51.3, 50.8, 49.5, 51.2, 50.1, 49.9, 52.3, 50.5, 51.1, 49.7],
+            "value": [
+                50.5,
+                48.2,
+                52.1,
+                49.8,
+                51.3,
+                50.8,
+                49.5,
+                51.2,
+                50.1,
+                49.9,
+                52.3,
+                50.5,
+                51.1,
+                49.7,
+            ],
             "unit": "μV",
             "quality": 95,
             "timestamp": int(time.time() * 1000),
         }
 
-        resp = requests.post(f"{CLINIC_ENDPOINT}/device/eeg_001/reading", json=eeg_data)
+        resp = requests.post(
+            f"{CLINIC_ENDPOINT}/device/eeg_001/reading", json=eeg_data
+        )
         if resp.status_code == 200:
             print(f"✅ EEG reading submitted")
             print(f"   Channels: 14")
@@ -265,7 +297,9 @@ def test_clinical_data():
             "timestamp": int(time.time() * 1000),
         }
 
-        resp = requests.post(f"{CLINIC_ENDPOINT}/device/spo2_001/reading", json=spo2_data)
+        resp = requests.post(
+            f"{CLINIC_ENDPOINT}/device/spo2_001/reading", json=spo2_data
+        )
         if resp.status_code == 200:
             print(f"✅ SpO2 reading submitted")
             print(f"   Value: 98%")
@@ -284,6 +318,7 @@ def test_clinical_data():
 # TEST 7: GET SESSION DATA
 # ============================================================================
 
+
 def test_get_session(session_id: str):
     print("\n📋 TEST 7: Get Session Data")
     print("-" * 70)
@@ -294,7 +329,9 @@ def test_get_session(session_id: str):
             print(f"✅ Session retrieved")
             print(f"   Session ID: {data['session']['session_id']}")
             print(f"   Phone Readings: {len(data.get('phone_readings', []))}")
-            print(f"   Clinical Readings: {data['session']['clinical_readings_count']}")
+            print(
+                f"   Clinical Readings: {data['session']['clinical_readings_count']}"
+            )
         else:
             print(f"❌ Failed to get session: {resp.status_code}")
             return False
@@ -307,6 +344,7 @@ def test_get_session(session_id: str):
 # TEST 8: GET CLINIC READINGS
 # ============================================================================
 
+
 def test_get_clinic_readings():
     print("\n📋 TEST 8: Get Clinic Readings")
     print("-" * 70)
@@ -317,7 +355,9 @@ def test_get_clinic_readings():
             print(f"✅ Clinic readings retrieved")
             print(f"   Total readings: {len(data.get('readings', []))}")
             for reading in data.get("readings", [])[:3]:
-                print(f"   • {reading['device_type']}: {reading.get('value')} {reading.get('unit')}")
+                print(
+                    f"   • {reading['device_type']}: {reading.get('value')} {reading.get('unit')}"
+                )
         else:
             print(f"❌ Failed to get readings: {resp.status_code}")
             return False
@@ -330,6 +370,7 @@ def test_get_clinic_readings():
 # TEST 9: GET ANALYTICS
 # ============================================================================
 
+
 def test_analytics(session_id: str):
     print("\n📋 TEST 9: Get Analytics")
     print("-" * 70)
@@ -338,11 +379,17 @@ def test_analytics(session_id: str):
         if resp.status_code == 200:
             data = resp.json()
             print(f"✅ Analytics retrieved")
-            print(f"   Session Duration: {data.get('duration_ms')/1000:.1f} seconds")
+            print(
+                f"   Session Duration: {data.get('duration_ms')/1000:.1f} seconds"
+            )
             if "heart_rate" in data:
-                print(f"   Heart Rate - Avg: {data['heart_rate']['avg']:.1f} BPM")
+                print(
+                    f"   Heart Rate - Avg: {data['heart_rate']['avg']:.1f} BPM"
+                )
             if "temperature" in data:
-                print(f"   Temperature - Avg: {data['temperature']['avg']:.1f}°C")
+                print(
+                    f"   Temperature - Avg: {data['temperature']['avg']:.1f}°C"
+                )
         else:
             print(f"⚠️ Analytics not available yet: {resp.status_code}")
     except Exception as e:
@@ -352,6 +399,7 @@ def test_analytics(session_id: str):
 # ============================================================================
 # MAIN TEST RUNNER
 # ============================================================================
+
 
 def main():
     results = []
