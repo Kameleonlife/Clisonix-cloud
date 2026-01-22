@@ -97,11 +97,14 @@ from metrics import MetricsMiddleware, get_metrics
 
 # Curiosity Ocean - Groq + Hybrid Biometric Integration
 try:
-    from .ocean_routes import router as ocean_router
+    import ocean_routes
+    ocean_router = ocean_routes.router
     _OCEAN_AVAILABLE = True
-except ImportError:
+except (ImportError, AttributeError) as e:
     _OCEAN_AVAILABLE = False
     ocean_router = None
+    logger = logging.getLogger("main")
+    logger.warning(f"Ocean routes import failed: {e}")
 
 # --- API Key System for Monetization ---
 import secrets

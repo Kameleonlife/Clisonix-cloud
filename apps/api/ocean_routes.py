@@ -14,7 +14,10 @@ import httpx
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse, JSONResponse
 
-from .groq_ocean_integration import get_groq_client
+try:
+    from groq_ocean_integration import get_groq_client
+except ImportError:
+    from .groq_ocean_integration import get_groq_client
 
 logger = logging.getLogger("curiosity_ocean_routes")
 
