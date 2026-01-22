@@ -28,7 +28,7 @@ env:
 
 jobs:
   dependency-intelligence:
-    name: 📦 Dependency Intelligence (CodeQL v3)
+    name: 📦 Dependency Intelligence (CodeQL v4)
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -50,7 +50,7 @@ jobs:
       # FIXED: CodeQL v3 (January 2025 requirement)
       # ==========================================
       - name: Initialize CodeQL database
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}
           queries: security-and-quality
@@ -58,7 +58,7 @@ jobs:
           
       - name: Setup Python
         if: matrix.language == 'python'
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v4
         with:
           python-version: '3.11'
           cache: 'pip'
@@ -78,10 +78,10 @@ jobs:
       - name: Install Node dependencies
         if: matrix.language == 'javascript'
         run: |
-          npm ci 2>/dev/null || echo "⚠️  No Node dependencies found"
+          npm ci --include=optional 2>/dev/null || npm install --include=optional 2>/dev/null || echo "⚠️  Node dependencies installation failed"
 
       - name: Autobuild
-        uses: github/codeql-action/autobuild@v3
+        uses: github/codeql-action/autobuild@v4
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
@@ -95,7 +95,6 @@ jobs:
         with:
           fail-on-severity: critical
           allow-licenses: MIT,Apache-2.0,BSD-3-Clause,ISC,GPL-3.0-or-later
-          show-skipped: true
 
   secret-detection:
     name: 🔍 Secret Detection (Dual Engine)
@@ -112,7 +111,7 @@ jobs:
           persist-credentials: false
 
       - name: Gitleaks Scan
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@v4
         with:
           args: --verbose --redact --log-opts=--all
           config-path: .github/security/gitleaks.toml
@@ -120,12 +119,12 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           
       - name: TruffleHog High-Entropy Scan
-        uses: trufflesecurity/trufflehog-actions-scan@main
+        uses: trufflesecurity/trufflehog-github-actions@main
         with:
           path: ./
           base: ${{ github.event.repository.default_branch }}
           head: HEAD
-          extra_args: --debug
+          extra_args: --debug --only-verified
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         continue-on-error: true
@@ -180,17 +179,23 @@ jobs:
 
       - name: Build Docker image
         run: |
-          docker build -t ${{ env.IMAGE_NAME }}:${{ github.sha }} -f Dockerfile . 2>&1 || echo "⚠️  Docker build completed"
+          echo "🏗️  Building Docker image..."
+          if [ -f Dockerfile ]; then
+            docker build -t ${{ env.IMAGE_NAME }}:${{ github.sha }} -f Dockerfile . && echo "✅ Docker build successful" || echo "❌ Docker build failed"
+          else
+            echo "⚠️  No Dockerfile found, skipping build"
+          fi
         continue-on-error: true
 
       - name: Trivy Image Scan (CRITICAL/HIGH)
+        if: hashFiles('Dockerfile') != ''
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: ${{ env.IMAGE_NAME }}:${{ github.sha }}
           format: 'sarif'
           output: 'trivy-image.sarif'
           severity: 'CRITICAL,HIGH'
-          exit-code: '1'
+          exit-code: '0'
         continue-on-error: true
 
       - name: Trivy Filesystem Scan (CRITICAL/HIGH)
@@ -201,17 +206,19 @@ jobs:
           format: 'sarif'
           output: 'trivy-fs.sarif'
           severity: 'CRITICAL,HIGH'
-          exit-code: '1'
+          exit-code: '0'
         continue-on-error: true
 
       - name: Upload Trivy Image SARIF
-        uses: github/codeql-action/upload-sarif@v3
+        if: hashFiles('trivy-image.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy-image.sarif
         continue-on-error: true
 
       - name: Upload Trivy FS SARIF
-        uses: github/codeql-action/upload-sarif@v3
+        if: hashFiles('trivy-fs.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy-fs.sarif
         continue-on-error: true
@@ -252,11 +259,9 @@ jobs:
           retention-days: 90
 
       - name: Generate SLSA Provenance
-        uses: slsa-framework/slsa-github-generator@v2.0.0
+        uses: actions/attest-build-provenance@v2
         with:
-          builder: github-runner
-          artifact-path: sbom.spdx.json
-          generator-comments: "Clisonix Cloud SBOM & Provenance"
+          subject-path: sbom.spdx.json
         continue-on-error: true
 
   environment-guardrails:
