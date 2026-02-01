@@ -115,3 +115,22 @@ Each service stays in its window - scroll to see output
 cd c:\clisonix-cloud
 .\MASTER-LAUNCH-FULL.ps1 -Clean -Monitor
 ```
+
+---
+
+## 🔐 SSH Server Access (Linux/Docker)
+
+For secure remote access to the Docker environment:
+
+```bash
+# Setup SSH server
+./scripts/setup-ssh.sh
+docker-compose -f docker-compose.ssh.yml up -d
+
+# Connect (port 2222)
+ssh -i ~/.ssh/clisonix_cloud -p 2222 root@your-server-ip
+```
+
+📖 **Full SSH Guide**: [SSH_QUICK_REFERENCE.md](SSH_QUICK_REFERENCE.md)
+
+---

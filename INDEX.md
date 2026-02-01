@@ -5,6 +5,8 @@
 | Purpose | File | Type | Size |
 |---------|------|------|------|
 | **START HERE** | DELIVERY-SUMMARY.md | 📄 Guide | - |
+| **SSH Access** | SSH_ACCESS_GUIDE.md | 🔐 Guide | ~10 KB |
+| **SSH Quick Ref** | SSH_QUICK_REFERENCE.md | 🔐 Quick Ref | ~3 KB |
 | API Specification (Human) | openapi.yaml | 📋 YAML | 48.75 KB |
 | API Specification (Tools) | openapi.json | 📋 JSON | 72.48 KB |
 | API Specification (Binary) | openapi.cbor | 📋 CBOR | 28.26 KB |
