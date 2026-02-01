@@ -1,0 +1,38 @@
+# Clisonix Cloud SSH Server Configuration
+# Secure SSH configuration for Docker environment access
+
+# Port configuration
+Port 2222
+
+# Security settings
+PermitRootLogin prohibit-password
+PubkeyAuthentication yes
+PasswordAuthentication no
+ChallengeResponseAuthentication no
+UsePAM no
+
+# Disable dangerous features
+PermitEmptyPasswords no
+X11Forwarding no
+AllowTcpForwarding yes
+GatewayPorts no
+
+# Connection settings
+ClientAliveInterval 60
+ClientAliveCountMax 3
+MaxAuthTries 3
+MaxSessions 10
+
+# Logging
+SyslogFacility AUTH
+LogLevel INFO
+
+# Authentication
+AuthorizedKeysFile .ssh/authorized_keys
+StrictModes yes
+
+# Banner
+Banner /etc/ssh/banner
+
+# Subsystem
+Subsystem sftp /usr/lib/ssh/sftp-server

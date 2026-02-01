@@ -1,0 +1,12 @@
+# Example authorized_keys file for Clisonix Cloud SSH access
+# Add your SSH public keys below (one per line)
+#
+# To generate a new SSH key:
+#   ssh-keygen -t ed25519 -C "your-email@example.com" -f ~/.ssh/clisonix_cloud
+#
+# Then copy your public key:
+#   cat ~/.ssh/clisonix_cloud.pub
+#
+# And paste it below:
+
+# ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA... your-email@example.com

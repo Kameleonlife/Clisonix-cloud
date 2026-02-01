@@ -112,3 +112,65 @@ curl https://api.clisonix.com/health
 
 **Clisonix Cloud in Production!**
 **Hetzner Deployment: Ready to Launch**
+
+### STEP 9: Setup SSH Server (Optional but Recommended)
+```bash
+# Generate SSH key on your local machine (if you don't have one)
+ssh-keygen -t ed25519 -C "your-email@example.com" -f ~/.ssh/clisonix_cloud
+
+# Copy your public key to the server
+cat ~/.ssh/clisonix_cloud.pub >> /opt/clisonix/infra/ssh/authorized_keys
+
+# Setup and start SSH server
+cd /opt/clisonix
+./scripts/setup-ssh.sh
+docker-compose -f docker-compose.ssh.yml up -d
+
+# Configure firewall for SSH access
+ufw allow 2222/tcp
+ufw status
+
+# Test SSH connection from your local machine
+ssh -i ~/.ssh/clisonix_cloud -p 2222 root@157.90.234.158
+```
+
+**Note**: SSH server runs on port 2222 for security. See [SSH_ACCESS_GUIDE.md](SSH_ACCESS_GUIDE.md) for detailed instructions.
+
+---
+
+## 🔐 SSH Server Access
+
+The SSH server provides secure remote access to the Docker environment:
+
+| Feature | Details |
+|---------|---------|
+| **Port** | 2222 (non-standard for security) |
+| **Authentication** | SSH key-based only (no passwords) |
+| **User** | root (with key authentication) |
+| **Available Tools** | docker, psql, redis-cli, htop, git, nano, vim |
+
+### Quick SSH Commands
+
+```bash
+# Connect to server
+ssh -i ~/.ssh/clisonix_cloud -p 2222 root@157.90.234.158
+
+# View running containers
+docker ps
+
+# View container logs
+docker logs clisonix-api
+
+# Access PostgreSQL
+psql -h postgres -U clisonix -d clisonixdb
+
+# Access Redis
+redis-cli -h redis
+
+# Monitor resources
+htop
+```
+
+For complete SSH documentation, see [SSH_ACCESS_GUIDE.md](SSH_ACCESS_GUIDE.md)
+
+---
