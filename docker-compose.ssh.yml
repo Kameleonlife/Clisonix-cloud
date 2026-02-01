@@ -10,7 +10,10 @@ services:
     ports:
       - "2222:2222"
     volumes:
-      # Mount Docker socket for container management
+      # Mount Docker socket for container management (READ-ONLY)
+      # ⚠️ SECURITY NOTE: Even with :ro, users can execute commands in containers
+      # via 'docker exec', which may have elevated privileges. Ensure only 
+      # trusted users have SSH access and consider additional access controls.
       - /var/run/docker.sock:/var/run/docker.sock:ro
       # Mount authorized_keys for SSH authentication
       - ./infra/ssh/authorized_keys:/root/.ssh/authorized_keys:ro

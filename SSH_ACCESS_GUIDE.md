@@ -259,6 +259,22 @@ ufw status
    docker exec clisonix-ssh ps aux | grep sshd
    ```
 
+6. **Docker Socket Security**
+   
+   ⚠️ **Important**: The SSH container has read-only access to the Docker socket, which allows viewing and executing commands in containers. While the socket is mounted as `:ro` (read-only), users can still:
+   
+   - ✅ View containers, logs, and stats
+   - ✅ Execute commands in existing containers (`docker exec`)
+   - ❌ Create, remove, or modify containers
+   - ❌ Change Docker daemon configuration
+   
+   **Security implications**:
+   - Users with SSH access can execute commands in containers that may have elevated privileges
+   - Only grant SSH access to trusted administrators
+   - Consider using `docker exec` with `--user` flag to limit privileges
+   - Monitor Docker API calls if additional security is needed
+   - For production, consider implementing additional access controls like Docker authorization plugins
+
 ## 🔧 Troubleshooting
 
 ### Connection Refused

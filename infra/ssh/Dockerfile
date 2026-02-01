@@ -16,6 +16,7 @@ RUN apk add --no-cache \
     vim \
     htop \
     git \
+    net-tools \
     && rm -rf /var/cache/apk/*
 
 # Create SSH directory structure

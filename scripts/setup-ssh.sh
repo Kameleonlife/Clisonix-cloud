@@ -85,11 +85,12 @@ echo -e "${GREEN}✅ Logs directory created${NC}"
 echo ""
 
 echo "[5/5] Checking Docker network..."
-if docker network ls | grep -q "clisonix-cloud_clisonix"; then
+NETWORK_NAME="clisonix-cloud_clisonix"
+if docker network ls --format '{{.Name}}' | grep -q "^${NETWORK_NAME}$"; then
     echo -e "${GREEN}✅ Docker network exists${NC}"
 else
     echo -e "${YELLOW}⚠️  Docker network not found, creating it...${NC}"
-    docker network create clisonix-cloud_clisonix || echo -e "${YELLOW}Network may already exist${NC}"
+    docker network create "$NETWORK_NAME" || echo -e "${YELLOW}Network may already exist${NC}"
 fi
 echo ""
 
