@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  ssh:
+    build:
+      context: ./infra/ssh
+      dockerfile: Dockerfile
+    container_name: clisonix-ssh
+    hostname: clisonix-ssh
+    ports:
+      - "2222:2222"
+    volumes:
+      # Mount Docker socket for container management (READ-ONLY)
+      # ⚠️ SECURITY NOTE: Even with :ro, users can execute commands in containers
+      # via 'docker exec', which may have elevated privileges. Ensure only 
+      # trusted users have SSH access and consider additional access controls.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # Mount authorized_keys for SSH authentication
+      - ./infra/ssh/authorized_keys:/root/.ssh/authorized_keys:ro
+      # Mount custom sshd_config
+      - ./infra/ssh/sshd_config:/etc/ssh/sshd_config:ro
+      # Mount banner
+      - ./infra/ssh/banner:/etc/ssh/banner:ro
+      # Mount logs directory
+      - ./logs/ssh:/var/log:rw
+    environment:
+      - TZ=UTC
+    networks:
+      - clisonix
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "sh", "-c", "netstat -tuln | grep -q ':2222'"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+networks:
+  clisonix:
+    external: true
+    name: clisonix-cloud_clisonix

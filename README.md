@@ -43,6 +43,7 @@ Industrial Backend & Payment System
 - **Plan-Based Quotas:** Subscription tier restrictions
 - **Rate Limiting:** Industrial middleware for API protection
 - **CORS Security:** Production-ready cross-origin handling
+- **SSH Server Access:** Secure remote access to Docker environment (port 2222)
 
 ---
 
@@ -126,6 +127,27 @@ uvicorn app.master:app --host 0.0.0.0 --port 8000 --reload
 - **Backend:** <http://localhost:8000>
 - **API Docs:** <http://localhost:8000/docs> (development only)
 - **Health Check:** <http://localhost:8000/health>
+
+### 4. Setup SSH Server (Optional)
+
+For secure remote access to the Docker environment:
+
+```bash
+# Generate SSH key
+ssh-keygen -t ed25519 -C "your-email@example.com" -f ~/.ssh/clisonix_cloud
+
+# Add your public key
+cat ~/.ssh/clisonix_cloud.pub >> infra/ssh/authorized_keys
+
+# Setup and start SSH server
+./scripts/setup-ssh.sh
+docker-compose -f docker-compose.ssh.yml up -d
+
+# Connect via SSH (port 2222)
+ssh -i ~/.ssh/clisonix_cloud -p 2222 root@localhost
+```
+
+📖 **Full SSH documentation**: [SSH_ACCESS_GUIDE.md](SSH_ACCESS_GUIDE.md)
 
 ---
 
